@@ -88,7 +88,7 @@ class VerificationEngine:
             resp = await self.http.get(probe_url)
             if resp and resp.get("status") == 200:
                 body = resp.get("body", "") or ""
-                fingerprint = hashlib.md5(body[:2048].encode()).hexdigest()
+                fingerprint = hashlib.sha256(body[:2048].encode()).hexdigest()
                 logger.debug("Soft-404 fingerprint for %s: %s", base_url, fingerprint)
                 self._soft_404_fingerprints[base_url] = fingerprint
                 return fingerprint
@@ -102,7 +102,7 @@ class VerificationEngine:
         fingerprint = self._soft_404_fingerprints.get(base_url)
         if fingerprint is None:
             return False
-        return hashlib.md5(body[:2048].encode()).hexdigest() == fingerprint
+        return hashlib.sha256(body[:2048].encode()).hexdigest() == fingerprint
 
     # ------------------------------------------------------------------
     # WAF / Rate-limit detection
