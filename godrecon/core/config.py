@@ -353,7 +353,7 @@ class APIConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     api_key: str = ""
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: List[str] = Field(default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"])
     max_concurrent_scans: int = 3
 
 

@@ -44,7 +44,7 @@ try:
 
         Args:
             api_key: Required ``X-API-Key`` value. Empty string disables auth.
-            cors_origins: List of allowed CORS origins. Defaults to ``["*"]``.
+            cors_origins: List of allowed CORS origins. Defaults to ``["http://127.0.0.1:8000", "http://localhost:8000"]``.
             max_concurrent_scans: Maximum parallel scans.
 
         Returns:
@@ -56,12 +56,15 @@ try:
             version=__version__,
         )
 
-        # CORS
-        origins = cors_origins if cors_origins is not None else ["*"]
+        # CORS — wildcard origins combined with allow_credentials=True is invalid
+        # per the CORS spec and signals a security misconfiguration.  Only enable
+        # credentials when specific (non-wildcard) origins are configured.
+        origins = cors_origins if cors_origins is not None else ["http://127.0.0.1:8000", "http://localhost:8000"]
+        allow_creds = "*" not in origins  # Disable credentials with wildcard origins
         _app.add_middleware(
             CORSMiddleware,
             allow_origins=origins,
-            allow_credentials=True,
+            allow_credentials=allow_creds,
             allow_methods=["*"],
             allow_headers=["*"],
         )
