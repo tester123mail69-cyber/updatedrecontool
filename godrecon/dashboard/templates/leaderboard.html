@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🏆 Leaderboard</h1>
+  <p>Statistics and achievements</p>
+</div>
+<div id="leaderboard-content">
+  <div class="empty-state"><span class="spinner spinner-lg"></span></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadLeaderboard() {
+  const container = document.getElementById('leaderboard-content');
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    const stats = {};
+    for (const scan of (scans.scans||[])) {
+      if (!stats[scan.target]) stats[scan.target] = {target:scan.target, scans:0, findings:0, critical:0, high:0, medium:0, low:0, last_scan: scan.created_at};
+      stats[scan.target].scans++;
+      if (scan.status==='completed') {
+        try {
+          const detail = await GODRECON.apiGet('/api/v1/scans/'+scan.scan_id);
+          (detail.findings||[]).forEach(f=>{
+            stats[scan.target].findings++;
+            const s=(f.severity||'info').toLowerCase();
+            if(stats[scan.target][s]!==undefined) stats[scan.target][s]++;
+          });
+        } catch(_){}
+      }
+    }
+    const rows = Object.values(stats).sort((a,b)=>b.findings-a.findings);
+    container.innerHTML = `
+    <div class="stats-grid mb-4">
+      <div class="stat-card"><div class="stat-value">${rows.length}</div><div class="stat-label">Targets Scanned</div></div>
+      <div class="stat-card red"><div class="stat-value text-red">${rows.reduce((s,r)=>s+r.critical,0)}</div><div class="stat-label">Critical Vulns</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--orange)">${rows.reduce((s,r)=>s+r.high,0)}</div><div class="stat-label">High Vulns</div></div>
+      <div class="stat-card"><div class="stat-value">${rows.reduce((s,r)=>s+r.findings,0)}</div><div class="stat-label">Total Findings</div></div>
+    </div>
+    <div class="card p-0">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Rank</th><th>Target</th><th>Scans</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead>
+          <tbody>
+          ${rows.map((r,i)=>`
+            <tr>
+              <td><strong>${i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1)}</strong></td>
+              <td class="font-mono">${GODRECON.escHtml(r.target)}</td>
+              <td>${r.scans}</td>
+              <td class="text-red"><strong>${r.critical}</strong></td>
+              <td style="color:var(--orange)">${r.high}</td>
+              <td style="color:var(--yellow)">${r.medium}</td>
+              <td class="text-blue">${r.low}</td>
+              <td><strong>${r.findings}</strong></td>
+              <td class="text-muted text-sm">${GODRECON.relativeTime(r.last_scan)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏆</div><div class="empty-state-title">No data available</div><p>Run some scans to see leaderboard statistics.</p></div>';
+  }
+}
+loadLeaderboard();
+</script>
+{% endblock %}

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Kanban Board — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>📋 Kanban Board</h1>
+  <p>Drag and drop findings through your workflow</p>
+  <div class="page-header-actions">
+    <button class="btn btn-sm btn-primary" onclick="openModal('add-card-modal')">➕ Add Card</button>
+    <button class="btn btn-sm" onclick="importFromVulns()">⬇ Import from Vulns</button>
+    <button class="btn btn-sm" onclick="saveKanban()">💾 Save</button>
+  </div>
+</div>
+
+<div class="kanban-board" id="kanban-board">
+  <div class="kanban-col" data-col="found">
+    <div class="kanban-col-indicator col-found"></div>
+    <div class="kanban-col-header">
+      <span>🔍 Found</span>
+      <span class="col-count badge">0</span>
+    </div>
+    <div class="kanban-cards" id="col-found" data-col="found"></div>
+  </div>
+  <div class="kanban-col" data-col="verified">
+    <div class="kanban-col-indicator col-verified"></div>
+    <div class="kanban-col-header">
+      <span>✅ Verified</span>
+      <span class="col-count badge">0</span>
+    </div>
+    <div class="kanban-cards" id="col-verified" data-col="verified"></div>
+  </div>
+  <div class="kanban-col" data-col="reported">
+    <div class="kanban-col-indicator col-reported"></div>
+    <div class="kanban-col-header">
+      <span>📤 Reported</span>
+      <span class="col-count badge">0</span>
+    </div>
+    <div class="kanban-cards" id="col-reported" data-col="reported"></div>
+  </div>
+  <div class="kanban-col" data-col="paid">
+    <div class="kanban-col-indicator col-paid"></div>
+    <div class="kanban-col-header">
+      <span>💰 Paid</span>
+      <span class="col-count badge">0</span>
+    </div>
+    <div class="kanban-cards" id="col-paid" data-col="paid"></div>
+  </div>
+  <div class="kanban-col" data-col="closed">
+    <div class="kanban-col-indicator col-closed"></div>
+    <div class="kanban-col-header">
+      <span>🔒 Closed</span>
+      <span class="col-count badge">0</span>
+    </div>
+    <div class="kanban-cards" id="col-closed" data-col="closed"></div>
+  </div>
+</div>
+
+<!-- Add Card Modal -->
+<div class="modal-overlay" id="add-card-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Kanban Card</span>
+      <button class="modal-close" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input class="form-input" id="kc-title" type="text" placeholder="Vulnerability title">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Severity</label>
+          <select class="form-select" id="kc-severity">
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Column</label>
+          <select class="form-select" id="kc-col">
+            <option value="found" selected>Found</option>
+            <option value="verified">Verified</option>
+            <option value="reported">Reported</option>
+            <option value="paid">Paid</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Target</label>
+          <input class="form-input" id="kc-target" type="text" placeholder="example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bounty Estimate</label>
+          <input class="form-input" id="kc-bounty" type="text" placeholder="$500">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-modal-close>Cancel</button>
+      <button class="btn btn-primary" onclick="addCard()">Add Card</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let kanbanData = {};
+
+async function loadKanban() {
+  try {
+    const data = await GODRECON.apiGet('/dashboard/api/kanban');
+    kanbanData = data.cards || {};
+    renderKanban();
+  } catch(e) {
+    renderKanban();
+  }
+}
+
+function renderKanban() {
+  ['found','verified','reported','paid','closed'].forEach(col => {
+    const container = document.getElementById('col-'+col);
+    if (!container) return;
+    const cards = kanbanData[col] || [];
+    container.innerHTML = cards.map(c => createCardHTML(c)).join('');
+  });
+  GODRECON.makeSortable && updateKanbanColCounts();
+  if (window.GODRECON) window.initKanban && initKanban();
+  // reinit drag
+  document.querySelectorAll('.kanban-card').forEach(card => {
+    card.setAttribute('draggable','true');
+    card.addEventListener('dragstart', e => { window._dk = card; card.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+    card.addEventListener('dragend', () => { card.classList.remove('dragging'); window._dk = null; document.querySelectorAll('.kanban-cards').forEach(c=>c.classList.remove('drag-over')); });
+  });
+  document.querySelectorAll('.kanban-cards').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+    col.addEventListener('drop', e => {
+      e.preventDefault(); col.classList.remove('drag-over');
+      if (window._dk && window._dk.parentElement !== col) { col.appendChild(window._dk); updateKanbanColCounts(); saveKanban(); }
+    });
+  });
+  updateKanbanColCounts();
+}
+
+function createCardHTML(c) {
+  return `<div class="kanban-card" data-id="${GODRECON.escHtml(c.id||c.title)}">
+    <div class="kanban-card-title">${GODRECON.escHtml(c.title)}</div>
+    <div class="kanban-card-meta">
+      <span class="badge ${GODRECON.severityClass(c.severity)}">${(c.severity||'info').toUpperCase()}</span>
+      <span class="kanban-card-target">${GODRECON.escHtml(c.target||'')}</span>
+      ${c.bounty ? `<span class="kanban-card-bounty">${GODRECON.escHtml(c.bounty)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function updateKanbanColCounts() {
+  document.querySelectorAll('.kanban-col').forEach(col => {
+    const count = col.querySelectorAll('.kanban-card').length;
+    const badge = col.querySelector('.col-count');
+    if (badge) badge.textContent = count;
+  });
+}
+
+function addCard() {
+  const title = document.getElementById('kc-title').value.trim();
+  if (!title) return;
+  const col = document.getElementById('kc-col').value;
+  const card = {
+    id: Date.now().toString(), title,
+    severity: document.getElementById('kc-severity').value,
+    target: document.getElementById('kc-target').value,
+    bounty: document.getElementById('kc-bounty').value
+  };
+  if (!kanbanData[col]) kanbanData[col] = [];
+  kanbanData[col].push(card);
+  renderKanban();
+  saveKanban();
+  GODRECON.closeModal('add-card-modal');
+  GODRECON.showToast('Card added', 'success');
+}
+
+async function saveKanban() {
+  const state = {};
+  ['found','verified','reported','paid','closed'].forEach(col => {
+    state[col] = Array.from(document.querySelectorAll(`#col-${col} .kanban-card`)).map(c => {
+      const title = c.querySelector('.kanban-card-title')?.textContent || '';
+      const sev = c.querySelector('.badge')?.textContent?.toLowerCase() || 'info';
+      const target = c.querySelector('.kanban-card-target')?.textContent || '';
+      const bounty = c.querySelector('.kanban-card-bounty')?.textContent || '';
+      return { id: c.dataset.id, title, severity: sev, target, bounty };
+    });
+  });
+  try {
+    await GODRECON.apiPost('/dashboard/api/kanban', { cards: state });
+  } catch(e) {}
+}
+
+async function importFromVulns() {
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    let count = 0;
+    for (const scan of (scans.scans || []).slice(0,3)) {
+      if (scan.status !== 'completed') continue;
+      const detail = await GODRECON.apiGet('/api/v1/scans/' + scan.scan_id);
+      (detail.findings || []).filter(f => ['critical','high'].includes((f.severity||'').toLowerCase())).slice(0,10).forEach(f => {
+        if (!kanbanData.found) kanbanData.found = [];
+        if (!kanbanData.found.find(c => c.title === f.title)) {
+          kanbanData.found.push({ id: Date.now().toString()+Math.random(), title: f.title, severity: f.severity, target: scan.target, bounty: '' });
+          count++;
+        }
+      });
+    }
+    renderKanban();
+    saveKanban();
+    GODRECON.showToast(`Imported ${count} findings`, 'success');
+  } catch(e) {
+    GODRECON.showToast('Error importing: ' + e.message, 'error');
+  }
+}
+
+loadKanban();
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Bounty Matcher — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🎯 Bounty Matcher</h1>
+  <p>Match scanned targets to bug bounty programs and payout estimates</p>
+</div>
+<div class="card">
+  <div class="card-title-lg mb-3">Bounty Programs Database</div>
+  <p class="text-sm text-muted mb-3">Automatically matches your scanned targets against known bug bounty programs on HackerOne, Bugcrowd, Intigriti, and YesWeHack.</p>
+  <button class="btn btn-primary" onclick="runMatcher()">🔍 Match All Targets</button>
+  <span id="match-status" class="text-sm text-muted ml-2"></span>
+</div>
+<div id="match-results"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const BOUNTY_DB = [
+  { name: 'Google VRP', domains: ['google.com','youtube.com','gmail.com','drive.google.com'], platform: 'HackerOne', payouts: { critical: '$31337', high: '$13337', medium: '$7500', low: '$1000' }, url: 'https://bughunters.google.com' },
+  { name: 'Microsoft MSRC', domains: ['microsoft.com','azure.com','office.com','outlook.com'], platform: 'Bugcrowd', payouts: { critical: '$20000', high: '$5000', medium: '$1000', low: '$500' }, url: 'https://msrc.microsoft.com/bug-bounty' },
+  { name: 'Facebook/Meta', domains: ['facebook.com','instagram.com','whatsapp.com'], platform: 'Self', payouts: { critical: '$100000', high: '$25000', medium: '$5000', low: '$500' }, url: 'https://hackerone.com/facebook' },
+  { name: 'Apple Security', domains: ['apple.com','icloud.com'], platform: 'Self', payouts: { critical: '$1000000', high: '$500000', medium: '$100000', low: '$5000' }, url: 'https://security.apple.com/security-bounty/' },
+  { name: 'Twitter/X', domains: ['twitter.com','x.com'], platform: 'HackerOne', payouts: { critical: '$15000', high: '$5000', medium: '$1750', low: '$140' }, url: 'https://hackerone.com/twitter' },
+  { name: 'GitHub', domains: ['github.com'], platform: 'HackerOne', payouts: { critical: '$30000', high: '$10000', medium: '$4000', low: '$617' }, url: 'https://hackerone.com/github' },
+  { name: 'Shopify', domains: ['shopify.com','myshopify.com'], platform: 'HackerOne', payouts: { critical: '$50000', high: '$15000', medium: '$3500', low: '$500' }, url: 'https://hackerone.com/shopify' },
+];
+
+async function runMatcher() {
+  const statusEl = document.getElementById('match-status');
+  const container = document.getElementById('match-results');
+  statusEl.textContent = 'Matching…';
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    const targets = [...new Set((scans.scans||[]).map(s=>s.target))];
+    if (!targets.length) {
+      statusEl.textContent = 'No scanned targets found.';
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎯</div><div class="empty-state-title">No targets to match</div><p>Add and scan some targets first.</p></div>';
+      return;
+    }
+    const matches = [];
+    for (const target of targets) {
+      const prog = BOUNTY_DB.find(p => p.domains.some(d => target === d || target.endsWith('.' + d)));
+      const scansForTarget = (scans.scans||[]).filter(s=>s.target===target);
+      let findings = 0, criticalCount = 0, highCount = 0;
+      for (const scan of scansForTarget.slice(0,1)) {
+        if (scan.status === 'completed') {
+          try {
+            const detail = await GODRECON.apiGet('/api/v1/scans/'+scan.scan_id);
+            findings = (detail.findings||[]).length;
+            criticalCount = (detail.findings||[]).filter(f=>(f.severity||'').toLowerCase()==='critical').length;
+            highCount = (detail.findings||[]).filter(f=>(f.severity||'').toLowerCase()==='high').length;
+          } catch(_) {}
+        }
+      }
+      matches.push({ target, program: prog, findings, criticalCount, highCount });
+    }
+    statusEl.textContent = `Matched ${matches.filter(m=>m.program).length}/${matches.length} targets`;
+    renderMatches(matches);
+  } catch(e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+function renderMatches(matches) {
+  const container = document.getElementById('match-results');
+  container.innerHTML = matches.map(m => {
+    const p = m.program;
+    const est = p ? (m.criticalCount * parseInt(p.payouts.critical.replace(/\D/g,''),10) + m.highCount * parseInt(p.payouts.high.replace(/\D/g,''),10)) : 0;
+    return `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title-lg">${GODRECON.escHtml(m.target)}</div>
+          <div class="text-sm text-muted mt-1">${m.findings} total findings · <span class="text-red">${m.criticalCount} critical</span> · <span style="color:var(--orange)">${m.highCount} high</span></div>
+        </div>
+        ${p ? `<span class="badge badge-success">${GODRECON.escHtml(p.platform)}</span>` : '<span class="badge badge-info">No Match</span>'}
+      </div>
+      ${p ? `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
+          <div><div class="text-xs text-muted">PROGRAM</div><div class="text-sm font-weight-600"><a href="${GODRECON.escHtml(p.url)}" target="_blank">${GODRECON.escHtml(p.name)}</a></div></div>
+          <div><div class="text-xs text-muted">PLATFORM</div><div class="text-sm">${GODRECON.escHtml(p.platform)}</div></div>
+          <div><div class="text-xs text-muted">CRITICAL PAYOUT</div><div class="text-sm text-red font-weight-600">${p.payouts.critical}</div></div>
+          <div><div class="text-xs text-muted">HIGH PAYOUT</div><div class="text-sm" style="color:var(--orange);">${p.payouts.high}</div></div>
+          <div><div class="text-xs text-muted">EST. EARNINGS</div><div class="text-sm text-green font-weight-600">$${est.toLocaleString()}</div></div>
+        </div>
+        <div class="mt-3"><a href="${GODRECON.escHtml(p.url)}" class="btn btn-sm btn-primary" target="_blank">Submit Report →</a></div>
+      ` : '<p class="text-sm text-muted">Target does not match any known bug bounty program in our database.</p>'}
+    </div>`;
+  }).join('');
+}
+
+runMatcher();
+</script>
+{% endblock %}

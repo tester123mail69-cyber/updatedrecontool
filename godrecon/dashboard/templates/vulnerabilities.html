@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Vulnerabilities — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🐛 Vulnerabilities</h1>
+  <p>All findings across all scans — click a row to expand details</p>
+  <div class="page-header-actions">
+    <button class="btn btn-sm" onclick="GODRECON.exportTableCSV('vuln-table','vulnerabilities.csv')">⬇ Export CSV</button>
+    <button class="btn btn-sm" onclick="exportVulnsJSON()">⬇ Export JSON</button>
+  </div>
+</div>
+
+<!-- Severity Summary -->
+<div class="sev-summary mb-4" id="sev-summary">
+  <div class="sev-count critical" onclick="quickFilter('critical')"><div class="sev-count-num" id="cnt-critical">0</div><div class="sev-count-label">Critical</div></div>
+  <div class="sev-count high" onclick="quickFilter('high')"><div class="sev-count-num" id="cnt-high">0</div><div class="sev-count-label">High</div></div>
+  <div class="sev-count medium" onclick="quickFilter('medium')"><div class="sev-count-num" id="cnt-medium">0</div><div class="sev-count-label">Medium</div></div>
+  <div class="sev-count low" onclick="quickFilter('low')"><div class="sev-count-num" id="cnt-low">0</div><div class="sev-count-label">Low</div></div>
+  <div class="sev-count info" onclick="quickFilter('info')"><div class="sev-count-num" id="cnt-info">0</div><div class="sev-count-label">Info</div></div>
+  <div class="sev-count" onclick="quickFilter('')" style="margin-left:8px;"><div class="sev-count-num" id="cnt-all">0</div><div class="sev-count-label">All</div></div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <input class="filter-input" id="vuln-search" type="text" placeholder="Search findings…" style="flex:1;min-width:200px;">
+  <select class="filter-select" id="sev-filter" onchange="applyFilters()">
+    <option value="">All Severities</option>
+    <option value="critical">Critical</option>
+    <option value="high">High</option>
+    <option value="medium">Medium</option>
+    <option value="low">Low</option>
+    <option value="info">Info</option>
+  </select>
+  <select class="filter-select" id="mod-filter" onchange="applyFilters()">
+    <option value="">All Modules</option>
+  </select>
+  <select class="filter-select" id="target-filter" onchange="applyFilters()">
+    <option value="">All Targets</option>
+  </select>
+  <select class="filter-select" id="status-filter" onchange="applyFilters()">
+    <option value="">All Status</option>
+    <option value="new">New</option>
+    <option value="verified">Verified</option>
+    <option value="false_positive">False Positive</option>
+  </select>
+</div>
+
+<div class="card p-0">
+  <div class="table-wrap">
+    <table id="vuln-table" data-sortable data-expandable>
+      <thead>
+        <tr>
+          <th class="sortable">Severity</th>
+          <th class="sortable">Title</th>
+          <th class="sortable">Category</th>
+          <th class="sortable">Module</th>
+          <th class="sortable">Target</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="vuln-tbody">
+        <tr><td colspan="7" class="table-empty"><span class="spinner"></span> Loading findings…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let allFindings = [];
+let vulnStatuses = {};
+
+async function loadFindings() {
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    const findings = [];
+    const targets = new Set(), modules = new Set();
+    for (const scan of (scans.scans || [])) {
+      if (scan.status !== 'completed') continue;
+      try {
+        const detail = await GODRECON.apiGet('/api/v1/scans/' + scan.scan_id);
+        (detail.findings || []).forEach(f => {
+          findings.push({ ...f, scan_id: scan.scan_id, scan_target: scan.target, status: vulnStatuses[f.title + scan.scan_id] || 'new' });
+          if (f.target) targets.add(f.target);
+          if (f.module) modules.add(f.module);
+        });
+      } catch(_) {}
+    }
+    allFindings = findings;
+    populateFilters(targets, modules);
+    updateCounts(findings);
+    renderFindings(findings);
+  } catch(e) {
+    document.getElementById('vuln-tbody').innerHTML = '<tr><td colspan="7" class="table-empty">No findings available. Run a scan first.</td></tr>';
+  }
+}
+
+function populateFilters(targets, modules) {
+  const mf = document.getElementById('mod-filter');
+  modules.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; mf.appendChild(o); });
+  const tf = document.getElementById('target-filter');
+  targets.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tf.appendChild(o); });
+}
+
+function updateCounts(findings) {
+  const counts = { critical:0, high:0, medium:0, low:0, info:0 };
+  findings.forEach(f => { const s = (f.severity||'info').toLowerCase(); if (counts[s] !== undefined) counts[s]++; });
+  Object.keys(counts).forEach(k => { const el = document.getElementById('cnt-'+k); if (el) el.textContent = counts[k]; });
+  const allEl = document.getElementById('cnt-all'); if (allEl) allEl.textContent = findings.length;
+}
+
+function renderFindings(list) {
+  const tbody = document.getElementById('vuln-tbody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="table-empty text-muted">No findings match the current filters.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map((f, i) => {
+    const sev = (f.severity || 'info').toLowerCase();
+    const statusBadge = f.status === 'verified' ? '<span class="badge badge-success">Verified</span>' : f.status === 'false_positive' ? '<span class="badge badge-info">FP</span>' : '<span class="badge">New</span>';
+    return `
+    <tr class="row-expandable" id="row-${i}">
+      <td><span class="badge ${GODRECON.severityClass(sev)}">${sev.toUpperCase()}</span></td>
+      <td><strong>${GODRECON.escHtml(f.title)}</strong></td>
+      <td class="text-sm">${GODRECON.escHtml(f.category||'—')}</td>
+      <td class="text-sm text-muted">${GODRECON.escHtml(f.module||'—')}</td>
+      <td class="text-sm font-mono">${GODRECON.escHtml(f.scan_target||f.target||'—')}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          <a href="/dashboard/scans/${f.scan_id}" class="btn btn-xs">Scan</a>
+          <button class="btn btn-xs btn-success" onclick="markStatus(${i},'verified');event.stopPropagation()">✓</button>
+          <button class="btn btn-xs btn-danger" onclick="markStatus(${i},'false_positive');event.stopPropagation()">✗ FP</button>
+        </div>
+      </td>
+    </tr>
+    <tr class="row-detail" id="detail-${i}">
+      <td colspan="7">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <div class="text-xs text-muted mb-1">DESCRIPTION</div>
+            <p class="text-sm">${GODRECON.escHtml(f.description||'No description available.')}</p>
+            ${f.evidence ? `<div class="text-xs text-muted mt-2 mb-1">EVIDENCE</div><pre>${GODRECON.escHtml(f.evidence)}</pre>` : ''}
+          </div>
+          <div>
+            ${f.remediation ? `<div class="text-xs text-muted mb-1">REMEDIATION</div><p class="text-sm">${GODRECON.escHtml(f.remediation)}</p>` : ''}
+            <div class="mt-2" style="display:flex;gap:12px;flex-wrap:wrap;">
+              ${f.cvss ? `<div><span class="text-xs text-muted">CVSS</span><br><strong>${f.cvss}</strong></div>` : ''}
+              ${f.cwe ? `<div><span class="text-xs text-muted">CWE</span><br><strong>${f.cwe}</strong></div>` : ''}
+              ${f.target ? `<div><span class="text-xs text-muted">TARGET</span><br><code class="text-xs">${GODRECON.escHtml(f.target)}</code></div>` : ''}
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // set up expand
+  list.forEach((_, i) => {
+    document.getElementById('row-'+i)?.addEventListener('click', function() {
+      document.getElementById('detail-'+i)?.classList.toggle('open');
+    });
+  });
+}
+
+function applyFilters() {
+  const q = document.getElementById('vuln-search').value.toLowerCase();
+  const sev = document.getElementById('sev-filter').value;
+  const mod = document.getElementById('mod-filter').value;
+  const target = document.getElementById('target-filter').value;
+  const status = document.getElementById('status-filter').value;
+  const filtered = allFindings.filter(f => {
+    if (q && !JSON.stringify(f).toLowerCase().includes(q)) return false;
+    if (sev && (f.severity||'').toLowerCase() !== sev) return false;
+    if (mod && f.module !== mod) return false;
+    if (target && f.target !== target && f.scan_target !== target) return false;
+    if (status && f.status !== status) return false;
+    return true;
+  });
+  updateCounts(filtered);
+  renderFindings(filtered);
+}
+
+function quickFilter(sev) {
+  document.getElementById('sev-filter').value = sev;
+  applyFilters();
+}
+
+function markStatus(idx, status) {
+  allFindings[idx].status = status;
+  GODRECON.showToast('Status updated to ' + status, 'success');
+  applyFilters();
+}
+
+function exportVulnsJSON() {
+  GODRECON.exportJSON(allFindings, 'vulnerabilities.json');
+}
+
+document.getElementById('vuln-search').addEventListener('input', GODRECON.debounce(applyFilters, 200));
+GODRECON.makeSortable('vuln-table');
+loadFindings();
+</script>
+{% endblock %}

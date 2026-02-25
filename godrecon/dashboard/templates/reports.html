@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Reports — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>📊 Reports</h1>
+  <p>Generate and download scan reports in various formats</p>
+</div>
+<div class="grid-2">
+  <!-- Generate form -->
+  <div class="card">
+    <div class="card-title-lg" style="margin-bottom:16px;">Generate New Report</div>
+    <form id="report-form">
+      <div class="form-group">
+        <label class="form-label">Scan</label>
+        <select class="form-select" id="r-scan"><option value="">All Scans</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Format</label>
+        <div style="display:flex;gap:8px;">
+          <label class="form-check"><input type="radio" name="format" value="markdown" checked> Markdown</label>
+          <label class="form-check"><input type="radio" name="format" value="json"> JSON</label>
+          <label class="form-check"><input type="radio" name="format" value="html"> HTML</label>
+          <label class="form-check"><input type="radio" name="format" value="csv"> CSV</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Include Sections</label>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <label class="form-check"><input type="checkbox" id="r-exec" checked> Executive Summary</label>
+          <label class="form-check"><input type="checkbox" id="r-vulns" checked> Vulnerabilities</label>
+          <label class="form-check"><input type="checkbox" id="r-subs" checked> Subdomains</label>
+          <label class="form-check"><input type="checkbox" id="r-tech"> Technology Stack</label>
+          <label class="form-check"><input type="checkbox" id="r-remediation" checked> Remediation Recommendations</label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">📄 Generate Report</button>
+      <span id="r-status" class="text-sm text-muted ml-2"></span>
+    </form>
+  </div>
+  <!-- Report history -->
+  <div class="card">
+    <div class="card-title-lg" style="margin-bottom:16px;">Recent Reports</div>
+    <div id="report-history">
+      <div class="text-muted text-sm">No reports generated yet.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadScans() {
+  try {
+    const data = await GODRECON.apiGet('/api/v1/scans');
+    const sel = document.getElementById('r-scan');
+    (data.scans || []).forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.scan_id;
+      o.textContent = `${s.target} — ${s.status} (${GODRECON.relativeTime(s.created_at)})`;
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+async function loadReportHistory() {
+  try {
+    const data = await GODRECON.apiGet('/dashboard/api/reports/history');
+    const container = document.getElementById('report-history');
+    const reports = data.reports || [];
+    if (!reports.length) { container.innerHTML = '<div class="text-muted text-sm">No reports generated yet.</div>'; return; }
+    container.innerHTML = reports.map(r => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div class="text-sm font-weight-600">${GODRECON.escHtml(r.filename)}</div>
+          <div class="text-xs text-muted">${r.format} · ${GODRECON.relativeTime(r.created_at)}</div>
+        </div>
+        <button class="btn btn-sm btn-blue" onclick="downloadReport('${r.id}')">⬇ Download</button>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+document.getElementById('report-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const scan_id = document.getElementById('r-scan').value;
+  const format = document.querySelector('input[name=format]:checked')?.value || 'markdown';
+  const statusEl = document.getElementById('r-status');
+  statusEl.textContent = 'Generating…';
+  try {
+    const data = await GODRECON.apiPost('/dashboard/api/reports/generate', {
+      scan_id, format,
+      include_exec: document.getElementById('r-exec').checked,
+      include_vulns: document.getElementById('r-vulns').checked,
+      include_subs: document.getElementById('r-subs').checked,
+      include_tech: document.getElementById('r-tech').checked,
+      include_remediation: document.getElementById('r-remediation').checked
+    });
+    statusEl.textContent = 'Report generated!';
+    statusEl.style.color = 'var(--green)';
+    // Download immediately
+    if (data.content) {
+      const mime = format === 'json' ? 'application/json' : format === 'html' ? 'text/html' : 'text/plain';
+      GODRECON.downloadFile && GODRECON.downloadFile(data.content, data.filename || 'report.' + format, mime);
+    }
+    loadReportHistory();
+    GODRECON.showToast('Report generated successfully', 'success');
+  } catch(err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.style.color = 'var(--red)';
+  }
+});
+
+async function downloadReport(id) {
+  try {
+    const data = await GODRECON.apiGet('/dashboard/api/reports/' + id);
+    const mime = data.format === 'json' ? 'application/json' : data.format === 'html' ? 'text/html' : 'text/plain';
+    if (data.content) GODRECON.downloadFile(data.content, data.filename, mime);
+  } catch(e) { GODRECON.showToast('Error: ' + e.message, 'error'); }
+}
+
+loadScans();
+loadReportHistory();
+</script>
+{% endblock %}

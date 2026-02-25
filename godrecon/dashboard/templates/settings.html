@@ -2,73 +2,211 @@
 {% block title %}Settings — GODRECON{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>Settings</h1>
-    <p>Review and configure GODRECON settings. Edit <code>config.yaml</code> to persist changes.</p>
+  <h1>⚙️ Settings</h1>
+  <p>Configure GODRECON — edit <code>config.yaml</code> to persist changes</p>
 </div>
 
 {% if message %}
 <div class="alert alert-success">{{ message }}</div>
 {% endif %}
 
-<!-- API Keys -->
-<div class="card">
-    <div class="card-title">API Keys</div>
-    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Configure external service API keys in <code>config.yaml</code> under <code>api_keys</code>.</p>
-    {% if config.api_keys %}
-    <div class="table-wrap">
-        <table>
-            <thead><tr><th>Service</th><th>Status</th></tr></thead>
-            <tbody>
-                {% for key, val in config.api_keys.items() %}
-                <tr>
-                    <td>{{ key }}</td>
-                    <td>{% if val and val != '***' %}<span style="color:var(--green);">✓ Configured</span>{% elif val == '***' %}<span style="color:var(--green);">✓ Set</span>{% else %}<span style="color:var(--text-muted);">Not set</span>{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
+<div class="tabs" style="margin-bottom:0;">
+  <button class="tab-btn active" onclick="switchSettingsTab('tab-api-keys',this)">API Keys</button>
+  <button class="tab-btn" onclick="switchSettingsTab('tab-features',this)">Features</button>
+  <button class="tab-btn" onclick="switchSettingsTab('tab-performance',this)">Performance</button>
+  <button class="tab-btn" onclick="switchSettingsTab('tab-proxy',this)">Proxy</button>
+  <button class="tab-btn" onclick="switchSettingsTab('tab-notifications',this)">Notifications</button>
+  <button class="tab-btn" onclick="switchSettingsTab('tab-raw',this)">Raw Config</button>
 </div>
 
-<!-- Notifications -->
-<div class="card">
-    <div class="card-title">Notifications</div>
-    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">Configure notification backends for continuous monitoring alerts.</p>
-    {% if config.notifications %}
-    <div class="table-wrap">
-        <table>
-            <thead><tr><th>Backend</th><th>Status</th></tr></thead>
-            <tbody>
-                {% for backend, cfg in config.notifications.items() %}
-                <tr>
-                    <td>{{ backend | capitalize }}</td>
-                    <td>{% if cfg.get('enabled') %}<span style="color:var(--green);">Enabled</span>{% else %}<span style="color:var(--text-muted);">Disabled</span>{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<form id="settings-form" class="mt-4">
+
+<div id="tab-api-keys" class="tab-content active">
+  <div class="card">
+    <div class="settings-section-title">🔑 Reconnaissance API Keys</div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Shodan</div><div class="settings-row-desc">Internet scanning data</div></div>
+      <input class="form-input" id="key-shodan" type="password" placeholder="Your Shodan API key" style="max-width:320px;">
     </div>
-    {% endif %}
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Censys</div><div class="settings-row-desc">Internet-wide scanning</div></div>
+      <input class="form-input" id="key-censys" type="password" placeholder="Censys API ID:Secret" style="max-width:320px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">SecurityTrails</div><div class="settings-row-desc">DNS and subdomain intel</div></div>
+      <input class="form-input" id="key-sectrails" type="password" placeholder="SecurityTrails API key" style="max-width:320px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">VirusTotal</div><div class="settings-row-desc">Malware and threat intel</div></div>
+      <input class="form-input" id="key-virustotal" type="password" placeholder="VirusTotal API key" style="max-width:320px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">GitHub Token</div><div class="settings-row-desc">For GitHub dorking module</div></div>
+      <input class="form-input" id="key-github" type="password" placeholder="ghp_… or github_pat_…" style="max-width:320px;">
+    </div>
+  </div>
+  <div class="card">
+    <div class="settings-section-title">🤖 AI/LLM API Keys</div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">OpenAI</div><div class="settings-row-desc">GPT models for AI validation</div></div>
+      <input class="form-input" id="key-openai" type="password" placeholder="sk-…" style="max-width:320px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Anthropic (Claude)</div><div class="settings-row-desc">Claude models</div></div>
+      <input class="form-input" id="key-claude" type="password" placeholder="sk-ant-…" style="max-width:320px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Google Gemini</div><div class="settings-row-desc">Gemini AI models</div></div>
+      <input class="form-input" id="key-gemini" type="password" placeholder="AIza…" style="max-width:320px;">
+    </div>
+  </div>
 </div>
 
-<!-- Modules -->
-<div class="card">
-    <div class="card-title">Modules</div>
+<div id="tab-features" class="tab-content">
+  <div class="card">
+    <div class="settings-section-title">🔬 Module Configuration</div>
     {% if config.modules %}
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-        {% for mod, enabled in config.modules.items() %}
-        <span style="padding:4px 12px;border-radius:12px;font-size:12px;{% if enabled %}background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);color:var(--green);{% else %}background:var(--bg3);border:1px solid var(--border);color:var(--text-muted);{% endif %}">
-            {{ mod }}
-        </span>
-        {% endfor %}
+    {% for mod, enabled in config.modules.items() %}
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">{{ mod }}</div></div>
+      <label class="toggle-switch">
+        <input type="checkbox" name="module_{{ mod }}" {% if enabled %}checked{% endif %}>
+        <span class="toggle-slider"></span>
+      </label>
     </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-sm text-muted">Module configuration not available. Check config.yaml.</p>
     {% endif %}
+  </div>
 </div>
 
-<!-- Current config (raw) -->
-<div class="card">
-    <div class="card-title">Full Configuration (read-only)</div>
-    <pre style="margin-top:8px;max-height:400px;overflow-y:auto;font-size:11px;">{{ config | tojson(indent=2) }}</pre>
+<div id="tab-performance" class="tab-content">
+  <div class="card">
+    <div class="settings-section-title">⚡ Performance Settings</div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Max Concurrent Scans</div><div class="settings-row-desc">Number of parallel scans</div></div>
+      <input class="form-input" type="number" id="perf-max-scans" value="{{ config.max_concurrent_scans or 3 }}" min="1" max="20" style="max-width:100px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Request Threads</div><div class="settings-row-desc">HTTP request concurrency</div></div>
+      <input class="form-input" type="number" id="perf-threads" value="{{ config.threads or 50 }}" min="1" max="500" style="max-width:100px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Request Timeout (s)</div><div class="settings-row-desc">HTTP request timeout seconds</div></div>
+      <input class="form-input" type="number" id="perf-timeout" value="{{ config.timeout or 30 }}" min="5" max="120" style="max-width:100px;">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Rate Limit (req/s)</div><div class="settings-row-desc">Maximum requests per second</div></div>
+      <input class="form-input" type="number" id="perf-ratelimit" value="{{ config.rate_limit or 10 }}" min="1" max="1000" style="max-width:100px;">
+    </div>
+  </div>
 </div>
+
+<div id="tab-proxy" class="tab-content">
+  <div class="card">
+    <div class="settings-section-title">🔗 Proxy Configuration</div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Enable Proxy</div></div>
+      <label class="toggle-switch"><input type="checkbox" id="proxy-enabled"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="form-group mt-3">
+      <label class="form-label">HTTP Proxy</label>
+      <input class="form-input" id="proxy-http" type="text" placeholder="http://127.0.0.1:8080">
+    </div>
+    <div class="form-group">
+      <label class="form-label">HTTPS Proxy</label>
+      <input class="form-input" id="proxy-https" type="text" placeholder="http://127.0.0.1:8080">
+    </div>
+    <div class="form-group">
+      <label class="form-label">SOCKS5 Proxy</label>
+      <input class="form-input" id="proxy-socks5" type="text" placeholder="socks5://127.0.0.1:1080">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Verify SSL</div><div class="settings-row-desc">Verify SSL certificates</div></div>
+      <label class="toggle-switch"><input type="checkbox" id="proxy-ssl-verify" checked><span class="toggle-slider"></span></label>
+    </div>
+  </div>
+</div>
+
+<div id="tab-notifications" class="tab-content">
+  <div class="card">
+    <div class="settings-section-title">🔔 Notification Backends</div>
+    {% if config.notifications %}
+    {% for backend, cfg in config.notifications.items() %}
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">{{ backend | capitalize }}</div><div class="settings-row-desc">{% if cfg.get('enabled') %}Enabled{% else %}Disabled{% endif %}</div></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="badge {% if cfg.get('enabled') %}badge-success{% else %}badge-info{% endif %}">{% if cfg.get('enabled') %}Active{% else %}Inactive{% endif %}</span>
+        <a href="/dashboard/alerts" class="btn btn-xs">Configure</a>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-sm text-muted mb-3">Configure in the <a href="/dashboard/alerts">Alerts page</a>.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div id="tab-raw" class="tab-content">
+  <div class="card">
+    <div class="card-title">Full Configuration (read-only)</div>
+    <pre style="margin-top:8px;max-height:500px;overflow-y:auto;font-size:11px;">{{ config | tojson(indent=2) }}</pre>
+  </div>
+</div>
+
+<div class="mt-4" style="display:flex;gap:8px;">
+  <button type="submit" class="btn btn-primary">💾 Save Settings</button>
+  <span id="settings-status" class="text-sm text-muted" style="align-self:center;"></span>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+function switchSettingsTab(tabId, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  const el=document.getElementById(tabId); if(el) el.classList.add('active');
+}
+
+document.getElementById('settings-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const statusEl = document.getElementById('settings-status');
+  const settings = {
+    api_keys: {
+      shodan: document.getElementById('key-shodan').value,
+      censys: document.getElementById('key-censys').value,
+      securitytrails: document.getElementById('key-sectrails').value,
+      virustotal: document.getElementById('key-virustotal').value,
+      github: document.getElementById('key-github').value,
+      openai: document.getElementById('key-openai').value,
+      anthropic: document.getElementById('key-claude').value,
+      gemini: document.getElementById('key-gemini').value,
+    },
+    performance: {
+      max_concurrent_scans: parseInt(document.getElementById('perf-max-scans').value),
+      threads: parseInt(document.getElementById('perf-threads').value),
+      timeout: parseInt(document.getElementById('perf-timeout').value),
+      rate_limit: parseInt(document.getElementById('perf-ratelimit').value),
+    },
+    proxy: {
+      enabled: document.getElementById('proxy-enabled').checked,
+      http: document.getElementById('proxy-http').value,
+      https: document.getElementById('proxy-https').value,
+      socks5: document.getElementById('proxy-socks5').value,
+      ssl_verify: document.getElementById('proxy-ssl-verify').checked,
+    }
+  };
+  try {
+    await GODRECON.apiPost('/dashboard/api/settings', settings);
+    statusEl.textContent = 'Settings saved (session only — edit config.yaml to persist)';
+    statusEl.style.color = 'var(--green)';
+    GODRECON.showToast('Settings saved', 'success');
+  } catch(err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    GODRECON.showToast('Error: ' + err.message, 'error');
+  }
+});
+</script>
 {% endblock %}

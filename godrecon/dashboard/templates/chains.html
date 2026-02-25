@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Vuln Chains — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>⛓️ Vulnerability Chains</h1>
+  <p>Auto-detected vulnerability chains from vuln_chaining module</p>
+</div>
+<div class="card p-0">
+  <div class="card-header" style="padding:16px 20px;">
+    <div class="card-title-lg">Detected Chains</div>
+    <input class="filter-input" id="chain-search" type="text" placeholder="Filter chains…">
+  </div>
+  <div id="chains-container" style="padding:16px;">
+    <div class="empty-state"><div class="empty-state-icon">⛓️</div><div class="empty-state-title">Loading chains…</div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadChains() {
+  const container = document.getElementById('chains-container');
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    const chains = [];
+    for (const scan of (scans.scans || [])) {
+      if (scan.status !== 'completed') continue;
+      try {
+        const detail = await GODRECON.apiGet('/api/v1/scans/' + scan.scan_id);
+        const mod = (detail.module_results || {}).vuln_chaining;
+        if (mod) {
+          const data = mod.data || mod || {};
+          (data.chains || []).forEach(c => chains.push({ ...c, scan_id: scan.scan_id, target: scan.target }));
+        }
+        // also look at findings with chain info
+        (detail.findings || []).filter(f => f.category === 'chain' || f.module === 'vuln_chaining').forEach(f => {
+          chains.push({ title: f.title, steps: [f.description], severity: f.severity, scan_id: scan.scan_id, target: scan.target });
+        });
+      } catch(_) {}
+    }
+    if (!chains.length) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⛓️</div><div class="empty-state-title">No vulnerability chains detected</div><p>Chains are automatically detected when multiple related vulnerabilities are found in the same target.</p></div>';
+      return;
+    }
+    container.innerHTML = chains.map((c, i) => `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-header">
+          <div><span class="badge ${GODRECON.severityClass(c.severity)} mr-2">${(c.severity||'info').toUpperCase()}</span> <strong>${GODRECON.escHtml(c.title || 'Chain #'+(i+1))}</strong></div>
+          <div class="text-sm text-muted"><a href="/dashboard/scans/${c.scan_id}">${GODRECON.escHtml(c.target)}</a></div>
+        </div>
+        ${c.description ? `<p class="text-sm mb-2">${GODRECON.escHtml(c.description)}</p>` : ''}
+        <div>
+          ${(c.steps || []).map((step, si) => `
+            <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;">
+              <div style="background:var(--accent2);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${si+1}</div>
+              <div class="text-sm">${GODRECON.escHtml(typeof step === 'string' ? step : JSON.stringify(step))}</div>
+            </div>
+          `).join('')}
+        </div>
+        ${c.impact ? `<div class="mt-2"><span class="text-xs text-muted">IMPACT: </span><span class="text-sm">${GODRECON.escHtml(c.impact)}</span></div>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⛓️</div><div class="empty-state-title">No chain data available</div><p>Run a scan with the vuln_chaining module enabled.</p></div>';
+  }
+}
+
+GODRECON.filterTable('chain-search', 'chains-container');
+loadChains();
+</script>
+{% endblock %}

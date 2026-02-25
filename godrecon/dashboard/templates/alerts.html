@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Alerts — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🔔 Alerts</h1>
+  <p>Configure notification channels for new findings</p>
+</div>
+<form id="alerts-form">
+<div class="grid-2">
+  <!-- Slack -->
+  <div class="card">
+    <div class="settings-section-title">💬 Slack</div>
+    <div class="form-group">
+      <label class="form-label">Webhook URL</label>
+      <input class="form-input" id="slack-url" type="url" placeholder="https://hooks.slack.com/services/…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Channel</label>
+      <input class="form-input" id="slack-channel" type="text" placeholder="#security-alerts">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Enable Slack Alerts</div></div>
+      <label class="toggle-switch"><input type="checkbox" id="slack-enabled"><span class="toggle-slider"></span></label>
+    </div>
+    <button type="button" class="btn btn-sm mt-2" onclick="testAlert('slack')">Test Slack</button>
+  </div>
+  <!-- Discord -->
+  <div class="card">
+    <div class="settings-section-title">🎮 Discord</div>
+    <div class="form-group">
+      <label class="form-label">Webhook URL</label>
+      <input class="form-input" id="discord-url" type="url" placeholder="https://discord.com/api/webhooks/…">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Enable Discord Alerts</div></div>
+      <label class="toggle-switch"><input type="checkbox" id="discord-enabled"><span class="toggle-slider"></span></label>
+    </div>
+    <button type="button" class="btn btn-sm mt-2" onclick="testAlert('discord')">Test Discord</button>
+  </div>
+  <!-- Telegram -->
+  <div class="card">
+    <div class="settings-section-title">📱 Telegram</div>
+    <div class="form-group">
+      <label class="form-label">Bot Token</label>
+      <input class="form-input" id="telegram-token" type="password" placeholder="1234567890:ABCdef…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Chat ID</label>
+      <input class="form-input" id="telegram-chat" type="text" placeholder="-100123456789">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Enable Telegram Alerts</div></div>
+      <label class="toggle-switch"><input type="checkbox" id="telegram-enabled"><span class="toggle-slider"></span></label>
+    </div>
+    <button type="button" class="btn btn-sm mt-2" onclick="testAlert('telegram')">Test Telegram</button>
+  </div>
+  <!-- Custom Webhook -->
+  <div class="card">
+    <div class="settings-section-title">🔗 Custom Webhook</div>
+    <div class="form-group">
+      <label class="form-label">Webhook URL</label>
+      <input class="form-input" id="custom-url" type="url" placeholder="https://your-endpoint.com/webhook">
+    </div>
+    <div class="form-group">
+      <label class="form-label">HTTP Method</label>
+      <select class="form-select" id="custom-method"><option>POST</option><option>PUT</option></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Custom Headers (JSON)</label>
+      <input class="form-input" id="custom-headers" type="text" placeholder='{"Authorization":"Bearer …"}'>
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-info"><div class="settings-row-label">Enable Custom Webhook</div></div>
+      <label class="toggle-switch"><input type="checkbox" id="custom-enabled"><span class="toggle-slider"></span></label>
+    </div>
+  </div>
+</div>
+
+<!-- Severity Filters -->
+<div class="card">
+  <div class="settings-section-title">⚡ Alert Severity Thresholds</div>
+  <p class="text-sm text-muted mb-3">Choose which severity levels trigger alerts:</p>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;">
+    <label class="form-check"><input type="radio" name="alert-sev" value="p1"> P1 Only (Critical)</label>
+    <label class="form-check"><input type="radio" name="alert-sev" value="p1p2" checked> P1+P2 (Critical &amp; High)</label>
+    <label class="form-check"><input type="radio" name="alert-sev" value="all"> All Severities</label>
+    <label class="form-check"><input type="radio" name="alert-sev" value="none"> Disabled</label>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;">
+  <button type="submit" class="btn btn-primary">💾 Save Alert Config</button>
+  <span id="alert-status" class="text-sm text-muted" style="align-self:center;"></span>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadAlertConfig() {
+  try {
+    const data = await GODRECON.apiGet('/dashboard/api/alerts');
+    const c = data.config || {};
+    if (c.slack) { document.getElementById('slack-url').value=c.slack.url||''; document.getElementById('slack-channel').value=c.slack.channel||''; document.getElementById('slack-enabled').checked=!!c.slack.enabled; }
+    if (c.discord) { document.getElementById('discord-url').value=c.discord.url||''; document.getElementById('discord-enabled').checked=!!c.discord.enabled; }
+    if (c.telegram) { document.getElementById('telegram-token').value=c.telegram.token||''; document.getElementById('telegram-chat').value=c.telegram.chat_id||''; document.getElementById('telegram-enabled').checked=!!c.telegram.enabled; }
+    if (c.custom) { document.getElementById('custom-url').value=c.custom.url||''; document.getElementById('custom-enabled').checked=!!c.custom.enabled; }
+    if (c.severity) { const r = document.querySelector(`input[name=alert-sev][value="${c.severity}"]`); if(r) r.checked=true; }
+  } catch(e) {}
+}
+
+document.getElementById('alerts-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const config = {
+    slack: { url: document.getElementById('slack-url').value, channel: document.getElementById('slack-channel').value, enabled: document.getElementById('slack-enabled').checked },
+    discord: { url: document.getElementById('discord-url').value, enabled: document.getElementById('discord-enabled').checked },
+    telegram: { token: document.getElementById('telegram-token').value, chat_id: document.getElementById('telegram-chat').value, enabled: document.getElementById('telegram-enabled').checked },
+    custom: { url: document.getElementById('custom-url').value, method: document.getElementById('custom-method').value, enabled: document.getElementById('custom-enabled').checked },
+    severity: document.querySelector('input[name=alert-sev]:checked')?.value || 'p1p2'
+  };
+  try {
+    await GODRECON.apiPost('/dashboard/api/alerts', { config });
+    document.getElementById('alert-status').textContent = 'Configuration saved!';
+    document.getElementById('alert-status').style.color = 'var(--green)';
+    GODRECON.showToast('Alert config saved', 'success');
+  } catch(err) {
+    GODRECON.showToast('Error: ' + err.message, 'error');
+  }
+});
+
+async function testAlert(channel) {
+  GODRECON.showToast(`Testing ${channel} webhook…`, 'info');
+  try {
+    await GODRECON.apiPost('/dashboard/api/alerts/test', { channel });
+    GODRECON.showToast(`${channel} test sent!`, 'success');
+  } catch(e) {
+    GODRECON.showToast(`Error: ${e.message}`, 'error');
+  }
+}
+
+loadAlertConfig();
+</script>
+{% endblock %}

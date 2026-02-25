@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Targets — GODRECON{% endblock %}
+{% block head %}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🎯 Targets</h1>
+  <p>Manage scan targets and launch scans</p>
+</div>
+
+<!-- Add Target Form -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title-lg">Add New Target</div>
+  </div>
+  <form id="add-target-form">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Domain / IP</label>
+        <input class="form-input" id="t-domain" type="text" placeholder="example.com or 192.168.1.1" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scan Mode</label>
+        <select class="form-select" id="t-mode">
+          <option value="quick">⚡ Quick Scan</option>
+          <option value="standard" selected>🔍 Standard Scan</option>
+          <option value="god_mode">🔱 GOD MODE</option>
+          <option value="continuous">♻️ Continuous</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tags (optional, comma-separated)</label>
+      <input class="form-input" id="t-tags" type="text" placeholder="bug-bounty, production, h1">
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="submit" class="btn btn-primary">➕ Add Target</button>
+      <button type="button" class="btn btn-success" onclick="addAndScan()">▶ Add &amp; Scan Now</button>
+      <span id="add-target-status" class="text-muted text-sm"></span>
+    </div>
+  </form>
+</div>
+
+<!-- Targets Table -->
+<div class="card p-0">
+  <div class="card-header" style="padding:16px 20px;">
+    <div class="card-title-lg">Targets (${targetsCount})</div>
+    <div class="filters-right">
+      <input class="filter-input" id="targets-search" type="text" placeholder="Search targets…">
+      <button class="btn btn-sm" onclick="GODRECON.exportTableCSV('targets-table','targets.csv')">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="targets-table" data-sortable>
+      <thead>
+        <tr>
+          <th class="sortable">Domain</th>
+          <th class="sortable">Status</th>
+          <th class="sortable">Last Scan</th>
+          <th class="sortable">Findings</th>
+          <th class="sortable">Mode</th>
+          <th>Tags</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="targets-tbody">
+        <tr><td colspan="7" class="table-empty"><span class="spinner"></span> Loading targets…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let targets = [];
+
+async function loadTargets() {
+  try {
+    const data = await GODRECON.apiGet('/dashboard/api/targets');
+    targets = data.targets || [];
+    renderTargets(targets);
+    document.querySelectorAll('[id$=targetsCount]').forEach(el => el.textContent = targets.length);
+  } catch(e) {
+    document.getElementById('targets-tbody').innerHTML = '<tr><td colspan="7" class="table-empty text-muted">No targets added yet. Add your first target above.</td></tr>';
+  }
+}
+
+function renderTargets(list) {
+  const tbody = document.getElementById('targets-tbody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="table-empty text-muted">No targets yet. Add your first target above.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(t => `
+    <tr>
+      <td><strong>${GODRECON.escHtml(t.domain)}</strong></td>
+      <td><span class="status-dot ${t.status || 'pending'}"></span><span class="status-${t.status || 'pending'}">${(t.status || 'pending').toUpperCase()}</span></td>
+      <td class="text-muted text-sm">${GODRECON.relativeTime(t.last_scan)}</td>
+      <td>${t.findings_count || 0}</td>
+      <td><span class="badge badge-blue">${t.mode || 'standard'}</span></td>
+      <td>${(t.tags || []).map(tag => `<span class="badge badge-purple" style="margin-right:3px;">${GODRECON.escHtml(tag)}</span>`).join('')}</td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm btn-success" onclick="scanTarget('${t.id}','${GODRECON.escHtml(t.domain)}')">▶ Scan</button>
+          <a href="/dashboard/scans?target=${encodeURIComponent(t.domain)}" class="btn btn-sm">History</a>
+          <button class="btn btn-sm btn-danger" onclick="deleteTarget('${t.id}','${GODRECON.escHtml(t.domain)}')">🗑</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('add-target-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const domain = document.getElementById('t-domain').value.trim();
+  const mode = document.getElementById('t-mode').value;
+  const tags = document.getElementById('t-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  if (!domain) return;
+  try {
+    await GODRECON.apiPost('/dashboard/api/targets', { domain, mode, tags });
+    document.getElementById('t-domain').value = '';
+    document.getElementById('t-tags').value = '';
+    GODRECON.showToast(`Target ${domain} added`, 'success');
+    loadTargets();
+  } catch(err) {
+    GODRECON.showToast('Error: ' + err.message, 'error');
+  }
+});
+
+async function addAndScan() {
+  const domain = document.getElementById('t-domain').value.trim();
+  const mode = document.getElementById('t-mode').value;
+  const tags = document.getElementById('t-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  if (!domain) { GODRECON.showToast('Please enter a domain', 'warning'); return; }
+  try {
+    await GODRECON.apiPost('/dashboard/api/targets', { domain, mode, tags });
+    const data = await GODRECON.startScan(domain, mode, document.getElementById('add-target-status'));
+    if (data?.scan_id) setTimeout(() => window.location.href = '/dashboard/scans/' + data.scan_id, 1500);
+    loadTargets();
+  } catch(err) {
+    GODRECON.showToast('Error: ' + err.message, 'error');
+  }
+}
+
+async function scanTarget(id, domain) {
+  const mode = 'standard';
+  const data = await GODRECON.startScan(domain, mode, null);
+  if (data?.scan_id) setTimeout(() => window.location.href = '/dashboard/scans/' + data.scan_id, 1200);
+}
+
+async function deleteTarget(id, domain) {
+  if (!confirm(`Delete target ${domain}?`)) return;
+  try {
+    await GODRECON.apiDelete('/dashboard/api/targets/' + id);
+    GODRECON.showToast(`Deleted ${domain}`, 'success');
+    loadTargets();
+  } catch(err) {
+    GODRECON.showToast('Error: ' + err.message, 'error');
+  }
+}
+
+GODRECON.filterTable('targets-search', 'targets-table');
+GODRECON.makeSortable('targets-table');
+loadTargets();
+</script>
+{% endblock %}

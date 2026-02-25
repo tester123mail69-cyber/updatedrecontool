@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Activity Log — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>📋 Activity Log</h1>
+  <p>All actions and events with timestamps</p>
+</div>
+<div class="filters">
+  <input class="filter-input" id="log-search" type="text" placeholder="Search log…" style="flex:1;">
+  <select class="filter-select" id="log-type-filter" onchange="filterLog()">
+    <option value="">All Types</option>
+    <option value="scan">Scan</option>
+    <option value="finding">Finding</option>
+    <option value="target">Target</option>
+    <option value="report">Report</option>
+    <option value="system">System</option>
+  </select>
+  <button class="btn btn-sm" onclick="GODRECON.exportTableCSV('log-table','activity-log.csv')">⬇ CSV</button>
+  <button class="btn btn-sm btn-danger" onclick="clearLog()">🗑 Clear</button>
+</div>
+<div class="card p-0">
+  <div class="table-wrap">
+    <table id="log-table" data-sortable>
+      <thead>
+        <tr>
+          <th class="sortable">Time</th>
+          <th class="sortable">Type</th>
+          <th>Action</th>
+          <th>Details</th>
+          <th class="sortable">Target</th>
+        </tr>
+      </thead>
+      <tbody id="log-tbody">
+        <tr><td colspan="5" class="table-empty"><span class="spinner"></span> Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let activityLog = [];
+const TYPE_BADGES = {scan:'badge-blue', finding:'badge-high', target:'badge-purple', report:'badge-success', system:'badge-info'};
+
+async function loadLog() {
+  try {
+    // Load from API
+    const data = await GODRECON.apiGet('/dashboard/api/activity-log');
+    activityLog = data.entries || [];
+    // Also add scan events from real API
+    try {
+      const scans = await GODRECON.apiGet('/api/v1/scans');
+      (scans.scans||[]).forEach(s => {
+        if (!activityLog.find(e=>e.id==='scan-'+s.scan_id)) {
+          activityLog.push({ id:'scan-'+s.scan_id, time:s.created_at, type:'scan', action:'Scan '+s.status, details:'Scan ID: '+s.scan_id, target:s.target });
+        }
+      });
+    } catch(_) {}
+    activityLog.sort((a,b)=>new Date(b.time)-new Date(a.time));
+    renderLog(activityLog);
+  } catch(e) {
+    document.getElementById('log-tbody').innerHTML = '<tr><td colspan="5" class="table-empty">No activity log entries yet.</td></tr>';
+  }
+}
+
+function renderLog(entries) {
+  const tbody = document.getElementById('log-tbody');
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="table-empty text-muted">No log entries.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(e=>`
+    <tr>
+      <td class="text-xs font-mono">${GODRECON.formatDate(e.time)}</td>
+      <td><span class="badge ${TYPE_BADGES[e.type]||'badge-info'}">${GODRECON.escHtml(e.type||'system')}</span></td>
+      <td class="text-sm">${GODRECON.escHtml(e.action||'')}</td>
+      <td class="text-xs text-muted">${GODRECON.escHtml(e.details||'')}</td>
+      <td class="text-sm font-mono">${GODRECON.escHtml(e.target||'—')}</td>
+    </tr>
+  `).join('');
+}
+
+function filterLog() {
+  const q = document.getElementById('log-search').value.toLowerCase();
+  const type = document.getElementById('log-type-filter').value;
+  const filtered = activityLog.filter(e => {
+    if (type && e.type !== type) return false;
+    if (q && !JSON.stringify(e).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  renderLog(filtered);
+}
+
+function clearLog() {
+  if (!confirm('Clear all log entries?')) return;
+  activityLog = [];
+  GODRECON.apiPost('/dashboard/api/activity-log/clear', {}).catch(()=>{});
+  renderLog([]);
+}
+
+document.getElementById('log-search').addEventListener('input', GODRECON.debounce(filterLog, 200));
+GODRECON.makeSortable('log-table');
+loadLog();
+</script>
+{% endblock %}

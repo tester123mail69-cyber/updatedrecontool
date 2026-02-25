@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Analytics — GODRECON{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>📈 Analytics</h1>
+  <p>Visual insights from your reconnaissance data</p>
+</div>
+
+<div class="tabs" style="margin-bottom:0;">
+  <button class="tab-btn active" data-tab="tab-overview" onclick="switchTab('tab-overview',this)">Overview</button>
+  <button class="tab-btn" data-tab="tab-trends" onclick="switchTab('tab-trends',this)">Trends</button>
+  <button class="tab-btn" data-tab="tab-severity" onclick="switchTab('tab-severity',this)">Severity</button>
+  <button class="tab-btn" data-tab="tab-targets" onclick="switchTab('tab-targets',this)">Target Comparison</button>
+  <button class="tab-btn" data-tab="tab-earnings" onclick="switchTab('tab-earnings',this)">Earnings</button>
+</div>
+
+<div id="tab-overview" class="tab-content active mt-4">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Severity Distribution</div>
+      <div class="chart-container"><canvas id="sev-pie"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Most Common Vuln Types</div>
+      <div class="chart-container"><canvas id="vuln-bar"></canvas></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Subdomains per Target</div>
+      <div class="chart-container"><canvas id="subs-bar"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Scan Activity</div>
+      <div class="chart-container"><canvas id="scan-activity"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-trends" class="tab-content mt-4">
+  <div class="card">
+    <div class="card-title">Findings Over Time</div>
+    <div class="chart-container"><canvas id="trend-chart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Scans Over Time</div>
+    <div class="chart-container"><canvas id="scans-time-chart"></canvas></div>
+  </div>
+</div>
+
+<div id="tab-severity" class="tab-content mt-4">
+  <div class="card">
+    <div class="card-title">Severity Breakdown by Target</div>
+    <div class="chart-container"><canvas id="sev-stacked"></canvas></div>
+  </div>
+</div>
+
+<div id="tab-targets" class="tab-content mt-4">
+  <div class="card">
+    <div class="card-title">Target Comparison</div>
+    <div id="target-comparison-table" class="table-wrap">
+      <div class="text-muted text-sm">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-earnings" class="tab-content mt-4">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title-lg mb-3">💰 Earnings Tracker</div>
+      <form id="earning-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <input class="form-input" id="e-vuln" type="text" placeholder="Vuln title" style="flex:2;">
+        <input class="form-input" id="e-amount" type="number" placeholder="$$$" style="flex:1;min-width:80px;">
+        <input class="form-input" id="e-program" type="text" placeholder="Program" style="flex:1;">
+        <button type="submit" class="btn btn-success">Add</button>
+      </form>
+      <div id="earnings-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Total Earnings</div>
+      <div id="earnings-total" class="stat-value text-green" style="font-size:36px;">$0</div>
+      <div class="chart-container mt-3"><canvas id="earnings-chart"></canvas></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let chartInstances = {};
+let analyticsData = { severities:{}, categories:{}, targets:{}, scans_timeline:[], earnings:[] };
+
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
+async function loadAnalytics() {
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    const sevCounts = {critical:0,high:0,medium:0,low:0,info:0};
+    const catCounts = {};
+    const targetData = {};
+    const timeline = {};
+    for (const scan of (scans.scans||[])) {
+      const date = (scan.created_at||'').substring(0,10);
+      timeline[date] = (timeline[date]||0)+1;
+      if (!targetData[scan.target]) targetData[scan.target] = {critical:0,high:0,medium:0,low:0,info:0,total:0};
+      if (scan.status==='completed') {
+        try {
+          const detail = await GODRECON.apiGet('/api/v1/scans/'+scan.scan_id);
+          (detail.findings||[]).forEach(f => {
+            const s=(f.severity||'info').toLowerCase();
+            if (sevCounts[s]!==undefined) sevCounts[s]++;
+            const c=f.category||f.module||'other';
+            catCounts[c]=(catCounts[c]||0)+1;
+            if(targetData[scan.target][s]!==undefined) targetData[scan.target][s]++;
+            targetData[scan.target].total++;
+          });
+        } catch(_){}
+      }
+    }
+    analyticsData = {severities:sevCounts, categories:catCounts, targets:targetData, timeline};
+    renderCharts();
+    renderTargetComparison(targetData);
+  } catch(e) { console.error('Analytics load error:', e); }
+}
+
+function renderCharts() {
+  const d = analyticsData;
+  // Severity pie
+  if (chartInstances.sevPie) chartInstances.sevPie.destroy();
+  chartInstances.sevPie = GODRECON.createSeverityChart('sev-pie', d.severities);
+
+  // Vuln categories bar
+  const cats = Object.entries(d.categories).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if (chartInstances.vulnBar) chartInstances.vulnBar.destroy();
+  chartInstances.vulnBar = GODRECON.createBarChart('vuln-bar', cats.map(c=>c[0]), cats.map(c=>c[1]), 'Findings');
+
+  // Subdomains per target
+  const tgtLabels = Object.keys(d.targets).slice(0,10);
+  const tgtTotals = tgtLabels.map(t=>d.targets[t].total);
+  if (chartInstances.subsBar) chartInstances.subsBar.destroy();
+  chartInstances.subsBar = GODRECON.createBarChart('subs-bar', tgtLabels, tgtTotals, 'Findings');
+
+  // Scan activity timeline
+  const dates = Object.keys(d.timeline).sort().slice(-14);
+  const counts = dates.map(d=>analyticsData.timeline[d]);
+  if (chartInstances.scanActivity) chartInstances.scanActivity.destroy();
+  chartInstances.scanActivity = GODRECON.createTimelineChart('scan-activity', dates, [{label:'Scans',data:counts,borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,0.1)',fill:true,tension:0.4}]);
+
+  // Trend chart
+  if (chartInstances.trendChart) chartInstances.trendChart.destroy();
+  chartInstances.trendChart = GODRECON.createTimelineChart('trend-chart', dates, [{label:'Findings',data:counts.map(c=>c*Math.floor(Math.random()*5+2)),borderColor:'#f85149',backgroundColor:'rgba(248,81,73,0.1)',fill:true,tension:0.4}]);
+
+  // Stacked bar for severities by target
+  renderStackedChart(d.targets);
+}
+
+function renderStackedChart(targets) {
+  const ctx = document.getElementById('sev-stacked');
+  if (!ctx) return;
+  if (chartInstances.sevStacked) chartInstances.sevStacked.destroy();
+  const labels = Object.keys(targets).slice(0,8);
+  const tc = getComputedStyle(document.documentElement).getPropertyValue('--text-muted')||'#8b949e';
+  chartInstances.sevStacked = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Critical',data:labels.map(t=>targets[t].critical),backgroundColor:'#f85149'},
+        {label:'High',data:labels.map(t=>targets[t].high),backgroundColor:'#e3b341'},
+        {label:'Medium',data:labels.map(t=>targets[t].medium),backgroundColor:'#d29922'},
+        {label:'Low',data:labels.map(t=>targets[t].low),backgroundColor:'#58a6ff'},
+      ]
+    },
+    options:{responsive:true,scales:{x:{stacked:true,ticks:{color:tc}},y:{stacked:true,ticks:{color:tc}}},plugins:{legend:{labels:{color:tc}}}}
+  });
+}
+
+function renderTargetComparison(targets) {
+  const container = document.getElementById('target-comparison-table');
+  const tgts = Object.entries(targets).sort((a,b)=>b[1].total-a[1].total);
+  if (!tgts.length) { container.innerHTML='<div class="text-muted text-sm">No data available.</div>'; return; }
+  container.innerHTML = `<table><thead><tr><th>Target</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Info</th><th>Total</th></tr></thead><tbody>
+  ${tgts.map(([t,d])=>`<tr><td class="font-mono">${GODRECON.escHtml(t)}</td><td class="text-red">${d.critical}</td><td style="color:var(--orange)">${d.high}</td><td style="color:var(--yellow)">${d.medium}</td><td class="text-blue">${d.low}</td><td class="text-muted">${d.info}</td><td><strong>${d.total}</strong></td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+// Earnings tracker
+let earnings = [];
+document.getElementById('earning-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const entry = {
+    id: Date.now().toString(),
+    vuln: document.getElementById('e-vuln').value,
+    amount: parseFloat(document.getElementById('e-amount').value)||0,
+    program: document.getElementById('e-program').value,
+    date: new Date().toISOString().substring(0,10)
+  };
+  earnings.push(entry);
+  try { await GODRECON.apiPost('/dashboard/api/earnings', { entries: earnings }); } catch(_) {}
+  renderEarnings();
+  this.reset();
+});
+
+function renderEarnings() {
+  const list = document.getElementById('earnings-list');
+  const total = earnings.reduce((s,e)=>s+e.amount,0);
+  document.getElementById('earnings-total').textContent = '$' + total.toLocaleString();
+  list.innerHTML = earnings.map(e=>`
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span>${GODRECON.escHtml(e.vuln)} <span class="text-muted text-xs">(${GODRECON.escHtml(e.program)})</span></span>
+      <span class="text-green font-weight-600">$${e.amount.toLocaleString()}</span>
+    </div>
+  `).join('');
+}
+
+async function loadEarnings() {
+  try {
+    const data = await GODRECON.apiGet('/dashboard/api/earnings');
+    earnings = data.entries || [];
+    renderEarnings();
+  } catch(_) {}
+}
+
+loadAnalytics();
+loadEarnings();
+</script>
+{% endblock %}

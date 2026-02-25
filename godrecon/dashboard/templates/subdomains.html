@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Subdomains — GODRECON{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>🔍 Subdomains</h1>
+  <p>All discovered subdomains across all scans</p>
+</div>
+<div class="card p-0">
+  <div class="card-header" style="padding:16px 20px;">
+    <div class="card-title-lg">Subdomain Inventory</div>
+    <div class="filters-right">
+      <input class="filter-input" id="sub-search" type="text" placeholder="Filter subdomains…">
+      <select class="filter-select" id="sub-status-filter" onchange="filterSubdomains()">
+        <option value="">All Status</option>
+        <option value="alive">Alive</option>
+        <option value="dead">Dead</option>
+      </select>
+      <button class="btn btn-sm" onclick="GODRECON.exportTableCSV('sub-table','subdomains.csv')">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="sub-table" data-sortable>
+      <thead>
+        <tr>
+          <th class="sortable">Subdomain</th>
+          <th class="sortable">Status</th>
+          <th>Tech Stack</th>
+          <th>Open Ports</th>
+          <th class="sortable">Vuln Count</th>
+          <th>Scan</th>
+        </tr>
+      </thead>
+      <tbody id="sub-tbody">
+        <tr><td colspan="6" class="table-empty"><span class="spinner"></span> Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let allSubs = [];
+async function loadSubdomains() {
+  try {
+    const scans = await GODRECON.apiGet('/api/v1/scans');
+    const rows = [];
+    for (const scan of (scans.scans || [])) {
+      if (scan.status !== 'completed') continue;
+      try {
+        const detail = await GODRECON.apiGet('/api/v1/scans/' + scan.scan_id);
+        const modResults = detail.module_results || {};
+        const subRes = modResults.subdomains;
+        if (subRes) {
+          const data = subRes.data || {};
+          const subs = data.subdomains || [];
+          subs.forEach(s => {
+            rows.push({ subdomain: s, scan_id: scan.scan_id, target: scan.target, status: 'unknown', techs: [], ports: [], vuln_count: 0 });
+          });
+        }
+        // count vulns per subdomain
+        const findings = detail.findings || [];
+        findings.forEach(f => {
+          const target = f.target || '';
+          const row = rows.find(r => r.subdomain === target || target.endsWith(r.subdomain));
+          if (row) row.vuln_count++;
+        });
+      } catch(_) {}
+    }
+    allSubs = rows;
+    renderSubdomains(rows);
+  } catch(e) {
+    document.getElementById('sub-tbody').innerHTML = '<tr><td colspan="6" class="table-empty">No subdomain data available yet. Run a scan first.</td></tr>';
+  }
+}
+
+function renderSubdomains(rows) {
+  const tbody = document.getElementById('sub-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty text-muted">No subdomains found yet. Complete a scan to populate this table.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="font-mono">${GODRECON.escHtml(r.subdomain)}</td>
+      <td><span class="badge ${r.status === 'alive' ? 'badge-success' : r.status === 'dead' ? 'badge-info' : 'badge-info'}">${r.status}</span></td>
+      <td>${(r.techs||[]).map(t => `<span class="badge badge-blue" style="margin-right:2px;">${GODRECON.escHtml(t)}</span>`).join('') || '<span class="text-dim">—</span>'}</td>
+      <td class="font-mono text-sm">${(r.ports||[]).join(', ') || '—'}</td>
+      <td>${r.vuln_count > 0 ? `<span class="badge ${r.vuln_count > 5 ? 'badge-high' : 'badge-medium'}">${r.vuln_count}</span>` : '0'}</td>
+      <td><a href="/dashboard/scans/${r.scan_id}" class="btn btn-xs">View Scan</a></td>
+    </tr>
+  `).join('');
+}
+
+function filterSubdomains() {
+  const q = document.getElementById('sub-search').value.toLowerCase();
+  const status = document.getElementById('sub-status-filter').value;
+  const filtered = allSubs.filter(r => {
+    const matchQ = !q || r.subdomain.toLowerCase().includes(q);
+    const matchS = !status || r.status === status;
+    return matchQ && matchS;
+  });
+  renderSubdomains(filtered);
+}
+
+document.getElementById('sub-search').addEventListener('input', filterSubdomains);
+GODRECON.makeSortable('sub-table');
+loadSubdomains();
+</script>
+{% endblock %}

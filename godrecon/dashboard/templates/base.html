@@ -1,136 +1,224 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}GODRECON Dashboard{% endblock %}</title>
-    <style>
-        :root {
-            --bg: #0d1117;
-            --bg2: #161b22;
-            --bg3: #21262d;
-            --border: #30363d;
-            --text: #e6edf3;
-            --text-muted: #8b949e;
-            --accent: #f85149;
-            --accent2: #58a6ff;
-            --green: #3fb950;
-            --yellow: #d29922;
-            --orange: #e3b341;
-            --red: #f85149;
-            --purple: #bc8cff;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
-        a { color: var(--accent2); text-decoration: none; }
-        a:hover { text-decoration: underline; }
-
-        /* Nav */
-        .nav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; height: 52px; gap: 8px; }
-        .nav-brand { font-size: 18px; font-weight: 700; color: var(--accent); margin-right: 24px; letter-spacing: 1px; }
-        .nav-link { color: var(--text-muted); padding: 6px 12px; border-radius: 6px; font-size: 13px; transition: all 0.15s; }
-        .nav-link:hover, .nav-link.active { color: var(--text); background: var(--bg3); text-decoration: none; }
-
-        /* Layout */
-        .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
-        .page-header { margin-bottom: 24px; }
-        .page-header h1 { font-size: 24px; font-weight: 600; }
-        .page-header p { color: var(--text-muted); margin-top: 4px; }
-
-        /* Cards */
-        .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-        .card-title { font-size: 14px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-
-        /* Stats grid */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
-        .stat-value { font-size: 32px; font-weight: 700; color: var(--text); }
-        .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-
-        /* Table */
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
-        td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        tr:last-child td { border-bottom: none; }
-        tr:hover td { background: var(--bg3); }
-
-        /* Severity badges */
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
-        .badge-critical { background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
-        .badge-high { background: rgba(255,140,0,0.15); color: #e3b341; border: 1px solid rgba(227,179,65,0.3); }
-        .badge-medium { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
-        .badge-low { background: rgba(88,166,255,0.15); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
-        .badge-info { background: rgba(139,148,158,0.15); color: #8b949e; border: 1px solid rgba(139,148,158,0.3); }
-
-        /* Status badges */
-        .status-completed { color: var(--green); }
-        .status-running { color: var(--accent2); }
-        .status-pending { color: var(--text-muted); }
-        .status-failed { color: var(--red); }
-
-        /* Buttons */
-        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--bg3); color: var(--text); transition: all 0.15s; }
-        .btn:hover { background: var(--border); text-decoration: none; }
-        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .btn-primary:hover { background: #da3633; border-color: #da3633; }
-
-        /* Filters */
-        .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-        .filter-input { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 12px; font-size: 13px; }
-        .filter-input:focus { outline: none; border-color: var(--accent2); }
-
-        /* Alert message */
-        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
-        .alert-success { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3); color: var(--green); }
-
-        /* Code */
-        pre, code { font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; }
-        pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .nav { overflow-x: auto; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-    </style>
+    <link rel="stylesheet" href="/dashboard/static/style.css">
+    {% block head %}{% endblock %}
 </head>
 <body>
-    <nav class="nav">
-        <span class="nav-brand">🔱 GODRECON</span>
-        <a href="/dashboard/" class="nav-link {% if request.url.path == '/dashboard/' %}active{% endif %}">Overview</a>
-        <a href="/dashboard/scans" class="nav-link {% if '/dashboard/scans' in request.url.path %}active{% endif %}">Scans</a>
-        <a href="/dashboard/findings" class="nav-link {% if '/dashboard/findings' in request.url.path %}active{% endif %}">Findings</a>
-        <a href="/dashboard/surface" class="nav-link {% if '/dashboard/surface' in request.url.path %}active{% endif %}">Attack Surface</a>
-        <a href="/dashboard/settings" class="nav-link {% if '/dashboard/settings' in request.url.path %}active{% endif %}">Settings</a>
-        <span style="margin-left: auto; color: var(--text-muted); font-size: 12px;">API: <a href="/docs" class="nav-link" style="display:inline;">Swagger</a></span>
-    </nav>
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
-    <script>
-        // Auto-refresh logic for pages with active scans
-        (function() {
-            const AUTO_REFRESH_INTERVAL = 5000;
-            const hasActive = document.querySelector('.status-running, .status-pending');
-            if (hasActive) {
-                setTimeout(() => location.reload(), AUTO_REFRESH_INTERVAL);
-            }
-        })();
+<div class="app-shell">
+  <!-- ===== TOP HEADER ===== -->
+  <header class="app-header">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu">☰</button>
+    <a href="/dashboard/" class="header-brand"><span>🔱</span> GODRECON</a>
 
-        // Client-side table filtering
-        function filterTable(inputId, tableId) {
-            const input = document.getElementById(inputId);
-            const table = document.getElementById(tableId);
-            if (!input || !table) return;
-            input.addEventListener('input', function() {
-                const filter = this.value.toLowerCase();
-                table.querySelectorAll('tbody tr').forEach(row => {
-                    row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
-                });
-            });
-        }
-    </script>
-    {% block scripts %}{% endblock %}
+    <!-- Global Search -->
+    <div class="header-search">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="globalSearchInput" placeholder="Search targets, findings, scans… (Ctrl+K)" readonly onclick="openSearchModal()">
+      <span class="search-kbd">Ctrl+K</span>
+    </div>
+
+    <div class="header-actions">
+      <!-- Notifications -->
+      <div style="position:relative;">
+        <button class="header-icon-btn" id="notifBtn" aria-label="Notifications">
+          🔔
+          <span class="notif-badge" id="notifCount">0</span>
+        </button>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-panel-header">
+            <span>Notifications</span>
+            <button class="btn btn-xs" onclick="markAllRead()">Mark all read</button>
+          </div>
+          <div class="notif-list" id="notifList">
+            <div class="notif-item"><div class="notif-item-title text-muted">No notifications</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dark/Light Toggle -->
+      <button class="header-icon-btn" id="themeToggle" aria-label="Toggle dark/light mode" title="Toggle dark/light mode">🌙</button>
+
+      <!-- User menu -->
+      <button class="user-menu-btn">
+        <span>👤</span> GODRECON
+      </button>
+
+      <!-- API Docs -->
+      <a href="/docs" class="btn btn-sm" target="_blank">API Docs</a>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- ===== SIDEBAR ===== -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-nav">
+
+        <!-- Main -->
+        <div class="nav-section">
+          <a href="/dashboard/" class="nav-item {% if request.url.path == '/dashboard/' or request.url.path == '/dashboard' %}active{% endif %}">
+            <span class="nav-icon">🏠</span> Dashboard
+          </a>
+          <a href="/dashboard/targets" class="nav-item {% if '/dashboard/targets' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🎯</span> Targets
+          </a>
+          <a href="/dashboard/subdomains" class="nav-item {% if '/dashboard/subdomains' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🔍</span> Subdomains
+          </a>
+          <a href="/dashboard/vulnerabilities" class="nav-item {% if '/dashboard/vulnerabilities' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🐛</span> Vulnerabilities
+          </a>
+          <a href="/dashboard/chains" class="nav-item {% if '/dashboard/chains' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">⛓️</span> Vuln Chains
+          </a>
+          <a href="/dashboard/secrets" class="nav-item {% if '/dashboard/secrets' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🔑</span> Secrets
+          </a>
+          <a href="/dashboard/kanban" class="nav-item {% if '/dashboard/kanban' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">📋</span> Kanban Board
+          </a>
+          <a href="/dashboard/reports" class="nav-item {% if '/dashboard/reports' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">📊</span> Reports
+          </a>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Scanners collapsible -->
+        <div class="nav-section">
+          <div class="nav-item nav-group-trigger" onclick="toggleNavGroup('scanners-group')" style="cursor:pointer;">
+            <span class="nav-icon">🔬</span> Scanners
+            <span class="nav-chevron" id="scanners-group-chevron">▶</span>
+          </div>
+          <div class="nav-group-children" id="scanners-group">
+            <a href="/dashboard/scanners/nuclei" class="nav-item {% if '/scanners/nuclei' in request.url.path %}active{% endif %}">Nuclei</a>
+            <a href="/dashboard/scanners/cloud" class="nav-item {% if '/scanners/cloud' in request.url.path %}active{% endif %}">Cloud Misconfig</a>
+            <a href="/dashboard/scanners/auth" class="nav-item {% if '/scanners/auth' in request.url.path %}active{% endif %}">Auth Scan</a>
+            <a href="/dashboard/scanners/waf" class="nav-item {% if '/scanners/waf' in request.url.path %}active{% endif %}">WAF Detection</a>
+            <a href="/dashboard/scanners/fuzzing" class="nav-item {% if '/scanners/fuzzing' in request.url.path %}active{% endif %}">Fuzzing</a>
+            <a href="/dashboard/scanners/cve" class="nav-item {% if '/scanners/cve' in request.url.path %}active{% endif %}">CVE/Exploits</a>
+            <a href="/dashboard/scanners/dns" class="nav-item {% if '/scanners/dns' in request.url.path %}active{% endif %}">DNS Analysis</a>
+            <a href="/dashboard/scanners/ssl" class="nav-item {% if '/scanners/ssl' in request.url.path %}active{% endif %}">SSL/TLS</a>
+            <a href="/dashboard/scanners/email" class="nav-item {% if '/scanners/email' in request.url.path %}active{% endif %}">Email Security</a>
+            <a href="/dashboard/scanners/supply-chain" class="nav-item {% if '/scanners/supply-chain' in request.url.path %}active{% endif %}">Supply Chain</a>
+            <a href="/dashboard/scanners/mobile-api" class="nav-item {% if '/scanners/mobile-api' in request.url.path %}active{% endif %}">Mobile API</a>
+            <a href="/dashboard/scanners/passive-recon" class="nav-item {% if '/scanners/passive-recon' in request.url.path %}active{% endif %}">Passive Recon</a>
+            <a href="/dashboard/scanners/wayback" class="nav-item {% if '/scanners/wayback' in request.url.path %}active{% endif %}">Wayback Machine</a>
+            <a href="/dashboard/scanners/business-logic" class="nav-item {% if '/scanners/business-logic' in request.url.path %}active{% endif %}">Business Logic</a>
+            <a href="/dashboard/scanners/multi-region" class="nav-item {% if '/scanners/multi-region' in request.url.path %}active{% endif %}">Multi-Region</a>
+            <a href="/dashboard/scanners/cache-poisoning" class="nav-item {% if '/scanners/cache-poisoning' in request.url.path %}active{% endif %}">Cache Poisoning</a>
+            <a href="/dashboard/scanners/browser-extensions" class="nav-item {% if '/scanners/browser-extensions' in request.url.path %}active{% endif %}">Browser Extensions</a>
+            <a href="/dashboard/scanners/scan-diff" class="nav-item {% if '/scanners/scan-diff' in request.url.path %}active{% endif %}">Scan Diff</a>
+            <a href="/dashboard/scanners/smart-params" class="nav-item {% if '/scanners/smart-params' in request.url.path %}active{% endif %}">Smart Params</a>
+            <a href="/dashboard/scanners/oob" class="nav-item {% if '/scanners/oob' in request.url.path %}active{% endif %}">OOB Callbacks</a>
+            <a href="/dashboard/scanners/github-dorking" class="nav-item {% if '/scanners/github-dorking' in request.url.path %}active{% endif %}">GitHub Dorking</a>
+          </div>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Analytics collapsible -->
+        <div class="nav-section">
+          <div class="nav-item nav-group-trigger" onclick="toggleNavGroup('analytics-group')" style="cursor:pointer;">
+            <span class="nav-icon">📈</span> Analytics
+            <span class="nav-chevron" id="analytics-group-chevron">▶</span>
+          </div>
+          <div class="nav-group-children" id="analytics-group">
+            <a href="/dashboard/analytics" class="nav-item {% if request.url.path == '/dashboard/analytics' %}active{% endif %}">Overview</a>
+            <a href="/dashboard/analytics/trends" class="nav-item {% if '/analytics/trends' in request.url.path %}active{% endif %}">Trend Charts</a>
+            <a href="/dashboard/analytics/severity" class="nav-item {% if '/analytics/severity' in request.url.path %}active{% endif %}">Severity Charts</a>
+            <a href="/dashboard/analytics/compare" class="nav-item {% if '/analytics/compare' in request.url.path %}active{% endif %}">Target Comparison</a>
+            <a href="/dashboard/analytics/ai-insights" class="nav-item {% if '/analytics/ai-insights' in request.url.path %}active{% endif %}">AI Insights</a>
+            <a href="/dashboard/analytics/earnings" class="nav-item {% if '/analytics/earnings' in request.url.path %}active{% endif %}">Earnings Tracker</a>
+          </div>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Other pages -->
+        <div class="nav-section">
+          <a href="/dashboard/ai-validation" class="nav-item {% if '/dashboard/ai-validation' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🤖</span> AI Validation
+          </a>
+          <a href="/dashboard/bounty-matcher" class="nav-item {% if '/dashboard/bounty-matcher' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🎯</span> Bounty Matcher
+          </a>
+          <a href="/dashboard/leaderboard" class="nav-item {% if '/dashboard/leaderboard' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🏆</span> Leaderboard
+          </a>
+          <a href="/dashboard/activity-log" class="nav-item {% if '/dashboard/activity-log' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">📋</span> Activity Log
+          </a>
+          <a href="/dashboard/alerts" class="nav-item {% if '/dashboard/alerts' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🔔</span> Alerts
+          </a>
+          <a href="/dashboard/settings" class="nav-item {% if '/dashboard/settings' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">⚙️</span> Settings
+          </a>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <!-- Legacy -->
+        <div class="nav-section">
+          <div class="nav-section-label">Legacy</div>
+          <a href="/dashboard/scans" class="nav-item {% if '/dashboard/scans' in request.url.path and '/scanners' not in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🗂</span> Scans
+          </a>
+          <a href="/dashboard/findings" class="nav-item {% if '/dashboard/findings' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🔎</span> Findings
+          </a>
+          <a href="/dashboard/surface" class="nav-item {% if '/dashboard/surface' in request.url.path %}active{% endif %}">
+            <span class="nav-icon">🗺</span> Attack Surface
+          </a>
+        </div>
+
+      </div>
+    </nav>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+      <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) if get_flashed_messages is defined else [] %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Global Search Modal -->
+<div class="search-modal-overlay" id="searchModalOverlay" onclick="closeSearchModal(event)">
+  <div class="search-modal" onclick="event.stopPropagation()">
+    <input type="text" class="search-modal-input" id="searchModalInput" placeholder="Search targets, findings, scans, pages…" autocomplete="off">
+    <div class="search-modal-results" id="searchModalResults"></div>
+  </div>
+</div>
+
+<script src="/dashboard/static/dashboard.js"></script>
+{% block scripts %}{% endblock %}
+<script>
+// Auto-open sidebar group if current page matches
+(function() {
+  const path = window.location.pathname;
+  if (path.includes('/scanners/')) {
+    const g = document.getElementById('scanners-group');
+    if (g) { g.style.display = 'block'; document.getElementById('scanners-group-chevron').style.transform = 'rotate(90deg)'; }
+  }
+  if (path.includes('/analytics')) {
+    const g = document.getElementById('analytics-group');
+    if (g) { g.style.display = 'block'; document.getElementById('analytics-group-chevron').style.transform = 'rotate(90deg)'; }
+  }
+})();
+</script>
 </body>
 </html>
