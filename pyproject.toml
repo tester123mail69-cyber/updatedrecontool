@@ -53,4 +53,8 @@ Issues = "https://github.com/tester123mail69-cyber/updatedrecontool/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-v --tb=short"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
 asyncio_mode = "auto"

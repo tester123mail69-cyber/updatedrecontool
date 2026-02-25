@@ -30,3 +30,18 @@ def mock_dns_resolver() -> MagicMock:
     resolver = MagicMock()
     resolver.resolve = AsyncMock(return_value=[])
     return resolver
+
+
+@pytest.fixture
+def tmp_config() -> dict:
+    """Return a minimal config dict for tests that need a lightweight configuration."""
+    return {
+        "general": {
+            "threads": 10,
+            "timeout": 5,
+            "retries": 1,
+        },
+        "dns": {
+            "resolvers": ["8.8.8.8"],
+        },
+    }
