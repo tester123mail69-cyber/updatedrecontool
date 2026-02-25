@@ -100,6 +100,14 @@ class ModulesConfig(BaseModel):
     content_discovery: bool = True
     network: bool = True
     visual: bool = True
+    js_secrets: bool = True
+    param_discovery: bool = True
+    waf: bool = True
+    fuzzing: bool = False  # disabled by default as it's active/noisy
+    supply_chain: bool = True
+    git_dorking: bool = True
+    oob: bool = False  # disabled by default (needs external server)
+    nuclei: bool = True
 
 
 class HttpProbeConfig(BaseModel):
@@ -184,6 +192,9 @@ class APIKeysConfig(BaseModel):
     hunter: str = ""
     github: str = ""
     fullhunt: str = ""
+    nvd: str = ""
+    gitlab: str = ""
+    shodan_facets: str = ""
 
 
 class ReportingConfig(BaseModel):
@@ -395,6 +406,85 @@ class DashboardConfig(BaseModel):
     port: int = 8000
 
 
+class AuthConfig(BaseModel):
+    """Authenticated scanning configuration."""
+    enabled: bool = False
+    cookies: Dict[str, str] = Field(default_factory=dict)
+    headers: Dict[str, str] = Field(default_factory=dict)
+    bearer_token: str = ""
+    api_key: str = ""
+    api_key_header: str = "X-API-Key"
+    login_url: str = ""
+    login_data: Dict[str, str] = Field(default_factory=dict)
+    session_renewal_url: str = ""
+
+
+class NucleiConfig(BaseModel):
+    """Nuclei template integration configuration."""
+    enabled: bool = True
+    binary_path: str = "nuclei"
+    templates_dir: str = ""
+    auto_update: bool = True
+    severity: List[str] = Field(default_factory=lambda: ["critical", "high", "medium", "low"])
+    concurrency: int = 25
+    timeout: int = 30
+
+
+class OOBConfig(BaseModel):
+    """Out-of-band detection configuration."""
+    enabled: bool = False
+    server_url: str = ""
+    interactsh_server: str = "https://oast.pro"
+    use_interactsh: bool = False
+    callback_timeout: int = 30
+
+
+class JSSecretsConfig(BaseModel):
+    """JavaScript secrets scanner configuration."""
+    enabled: bool = True
+    entropy_threshold: float = 4.0
+    max_js_files: int = 100
+    check_active: bool = False
+
+
+class GitDorkConfig(BaseModel):
+    """GitHub/GitLab dorking configuration."""
+    enabled: bool = True
+    max_results: int = 50
+    search_gitlab: bool = False
+    gitlab_url: str = "https://gitlab.com"
+
+
+class WAFConfig(BaseModel):
+    """WAF detection and bypass configuration."""
+    enabled: bool = True
+    apply_bypass: bool = True
+
+
+class FuzzingConfig(BaseModel):
+    """Fuzzing engine configuration."""
+    enabled: bool = False
+    max_mutations: int = 50
+    timeout: float = 10.0
+    detect_anomalies: bool = True
+
+
+class ParamDiscoveryConfig(BaseModel):
+    """Smart parameter discovery configuration."""
+    enabled: bool = True
+    brute_force: bool = True
+    mine_js: bool = True
+    extract_forms: bool = True
+    max_params: int = 100
+
+
+class SupplyChainConfig(BaseModel):
+    """Supply chain analysis configuration."""
+    enabled: bool = True
+    check_sri: bool = True
+    check_vulnerable_versions: bool = True
+
+
 class Config(BaseModel):
     """Top-level GODRECON configuration."""
 
@@ -423,6 +513,15 @@ class Config(BaseModel):
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    nuclei: NucleiConfig = Field(default_factory=NucleiConfig)
+    oob: OOBConfig = Field(default_factory=OOBConfig)
+    js_secrets: JSSecretsConfig = Field(default_factory=JSSecretsConfig)
+    git_dork: GitDorkConfig = Field(default_factory=GitDorkConfig)
+    waf: WAFConfig = Field(default_factory=WAFConfig)
+    fuzzing: FuzzingConfig = Field(default_factory=FuzzingConfig)
+    param_discovery: ParamDiscoveryConfig = Field(default_factory=ParamDiscoveryConfig)
+    supply_chain: SupplyChainConfig = Field(default_factory=SupplyChainConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
