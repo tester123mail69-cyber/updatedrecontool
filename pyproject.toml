@@ -47,9 +47,9 @@ dev = ["pytest>=7.4.0", "pytest-asyncio>=0.23.0", "pytest-cov>=4.1.0"]
 godrecon = "godrecon.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/tester122mail69-netizen/recon1"
-Repository = "https://github.com/tester122mail69-netizen/recon1"
-Issues = "https://github.com/tester122mail69-netizen/recon1/issues"
+Homepage = "https://github.com/tester123mail69-cyber/updatedrecontool"
+Repository = "https://github.com/tester123mail69-cyber/updatedrecontool"
+Issues = "https://github.com/tester123mail69-cyber/updatedrecontool/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -12,8 +12,8 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/tester122mail69-netizen/recon1?style=social)](https://github.com/tester122mail69-netizen/recon1/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/tester122mail69-netizen/recon1)](https://github.com/tester122mail69-netizen/recon1/issues)
+[![GitHub stars](https://img.shields.io/github/stars/tester123mail69-cyber/updatedrecontool?style=social)](https://github.com/tester123mail69-cyber/updatedrecontool/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/tester123mail69-cyber/updatedrecontool)](https://github.com/tester123mail69-cyber/updatedrecontool/issues)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **The Ultimate Automated Reconnaissance & Vulnerability Scanner for Bug Bounty Hunters**
@@ -140,7 +140,7 @@
 
 ```bash
 # Clone
-git clone https://github.com/tester122mail69-netizen/recon1.git
+git clone https://github.com/tester123mail69-cyber/updatedrecontool.git
 cd recon1
 
 # Install
