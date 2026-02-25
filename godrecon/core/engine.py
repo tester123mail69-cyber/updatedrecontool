@@ -113,10 +113,13 @@ class ScanEngine:
     async def run(self) -> ScanResult:
         """Execute the full scan and return aggregated results.
 
-        All independent modules run in parallel.  Modules that depend on
-        subdomain results are started concurrently with the subdomain module
-        and simply wait for its findings to be available in a shared store
-        before proceeding.
+        Execution proceeds in two phases:
+
+        1. **Phase 1** – the ``subdomains`` module and all modules that do
+           *not* depend on subdomain results run concurrently.
+        2. **Phase 2** – modules listed in :data:`_SUBDOMAIN_DEPS` run
+           concurrently after Phase 1 has finished, so subdomain data is
+           guaranteed to be available.
 
         Returns:
             :class:`ScanResult` containing data from all executed modules.
@@ -137,13 +140,25 @@ class ScanEngine:
         )
         await scheduler.start()
 
-        # Submit ALL modules at once for true parallel execution.
-        # Subdomain module gets HIGH priority so it completes sooner and
-        # downstream modules can benefit from its results.
-        for module in modules:
-            prio = int(Priority.HIGH) if module.name == "subdomains" else int(Priority.NORMAL)
+        # Phase 1: subdomains + independent modules
+        phase1_modules = [m for m in modules if m.name == "subdomains" or m.name not in _SUBDOMAIN_DEPS]
+        # Phase 2: subdomain-dependent modules
+        phase2_modules = [m for m in modules if m.name != "subdomains" and m.name in _SUBDOMAIN_DEPS]
+
+        for module in phase1_modules:
             task = Task(
-                priority=prio,
+                priority=int(Priority.HIGH),
+                name=module.name,
+                coro_factory=lambda m=module: self._run_module(m, result),
+                max_retries=self.config.general.retries,
+            )
+            await scheduler.submit(task)
+
+        await scheduler.run_all()
+
+        for module in phase2_modules:
+            task = Task(
+                priority=int(Priority.NORMAL),
                 name=module.name,
                 coro_factory=lambda m=module: self._run_module(m, result),
                 max_retries=self.config.general.retries,
