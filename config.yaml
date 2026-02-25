@@ -53,11 +53,56 @@ subdomains:
     wordlist: "wordlists/subdomains-large.txt"
     concurrency: 500
   permutation:
-    enabled: false
+    enabled: true
   recursive:
-    enabled: false
-    depth: 2
+    enabled: true
+    depth: 3
   timeout_per_source: 30
+
+subdomain_supercharger:
+  # Enable/disable individual passive sources
+  sources:
+    subfinder: true
+    amass: true
+    assetfinder: true
+    findomain: true
+    chaos: true
+    crtsh: true
+    securitytrails: true
+    shodan: true
+    censys: true
+    virustotal: true
+    bufferover: true
+    alienvault: true
+    wayback: true
+    commoncrawl: true
+    rapiddns: true
+    riddler: true
+    threatcrowd: true
+    hackertarget: true
+    dnsdumpster: true
+    github: true
+
+  # Active techniques
+  techniques:
+    dns_bruteforce: true
+    permutations: true
+    recursive: true
+    zone_transfer: true
+    tls_scraping: true
+    reverse_dns: true
+    google_dorking: true
+    noerror_enum: true
+    favicon_hash: true
+    spf_mining: true
+
+  # Settings
+  bruteforce_wordlist: "wordlists/subdomains-large.txt"
+  permutation_wordlist: "wordlists/permutations.txt"
+  recursive_depth: 3
+  threads: 50
+  timeout: 10
+  wildcard_detection: true
 
 dns_module:
   enabled: true
@@ -100,6 +145,7 @@ api_keys:
   nvd: ""
   gitlab: ""
   shodan_facets: ""
+  chaos: ""
 
 reporting:
   auto_report: true

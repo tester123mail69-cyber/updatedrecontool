@@ -213,6 +213,7 @@ class APIKeysConfig(BaseModel):
     openai: str = ""
     anthropic: str = ""
     gemini: str = ""
+    chaos: str = ""
 
 
 class ReportingConfig(BaseModel):
@@ -503,6 +504,63 @@ class SupplyChainConfig(BaseModel):
     check_vulnerable_versions: bool = True
 
 
+class SubdomainSuperchargerSourcesConfig(BaseModel):
+    """Toggle individual passive sources for the subdomain supercharger."""
+
+    subfinder: bool = True
+    amass: bool = True
+    assetfinder: bool = True
+    findomain: bool = True
+    chaos: bool = True
+    crtsh: bool = True
+    securitytrails: bool = True
+    shodan: bool = True
+    censys: bool = True
+    virustotal: bool = True
+    bufferover: bool = True
+    alienvault: bool = True
+    wayback: bool = True
+    commoncrawl: bool = True
+    rapiddns: bool = True
+    riddler: bool = True
+    threatcrowd: bool = True
+    hackertarget: bool = True
+    dnsdumpster: bool = True
+    github: bool = True
+
+
+class SubdomainSuperchargerTechniquesConfig(BaseModel):
+    """Toggle active techniques for the subdomain supercharger."""
+
+    dns_bruteforce: bool = True
+    permutations: bool = True
+    recursive: bool = True
+    zone_transfer: bool = True
+    tls_scraping: bool = True
+    reverse_dns: bool = True
+    google_dorking: bool = True
+    noerror_enum: bool = True
+    favicon_hash: bool = True
+    spf_mining: bool = True
+
+
+class SubdomainSuperchargerConfig(BaseModel):
+    """Subdomain supercharger configuration (30+ sources and techniques)."""
+
+    sources: SubdomainSuperchargerSourcesConfig = Field(
+        default_factory=SubdomainSuperchargerSourcesConfig
+    )
+    techniques: SubdomainSuperchargerTechniquesConfig = Field(
+        default_factory=SubdomainSuperchargerTechniquesConfig
+    )
+    bruteforce_wordlist: str = "wordlists/subdomains-large.txt"
+    permutation_wordlist: str = "wordlists/permutations.txt"
+    recursive_depth: int = 3
+    threads: int = 50
+    timeout: int = 10
+    wildcard_detection: bool = True
+
+
 class AIValidatorConfig(BaseModel):
     """AI-powered validator configuration."""
     provider: str = "pattern"  # pattern, openai, anthropic, gemini, ollama
@@ -653,6 +711,9 @@ class Config(BaseModel):
     smart_scoring: SmartScoringConfig = Field(default_factory=SmartScoringConfig)
     cache_poisoning_config: CachePoisoningConfig = Field(default_factory=CachePoisoningConfig)
     scan_mode: ScanModeConfig = Field(default_factory=ScanModeConfig)
+    subdomain_supercharger: SubdomainSuperchargerConfig = Field(
+        default_factory=SubdomainSuperchargerConfig
+    )
 
 
 def load_config(config_path: Optional[str] = None) -> Config:

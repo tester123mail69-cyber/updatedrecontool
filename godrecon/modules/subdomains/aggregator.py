@@ -83,6 +83,9 @@ def _build_sources(config: Config) -> List[SubdomainSource]:
             "godrecon.modules.subdomains.sources.github_search",
             fromlist=["GitHubSearchSource"],
         ).GitHubSearchSource(api.github),
+        "chaos": lambda: __import__(
+            "godrecon.modules.subdomains.sources.chaos", fromlist=["ChaosSource"]
+        ).ChaosSource(api.chaos),
     }
 
     source_classes = _discover_source_classes()
