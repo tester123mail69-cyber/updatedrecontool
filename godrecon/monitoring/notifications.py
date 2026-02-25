@@ -275,3 +275,149 @@ class NotificationManager:
                 timeout=_aiohttp.ClientTimeout(total=10),
             ) as resp:
                 resp.raise_for_status()
+
+
+# ---------------------------------------------------------------------------
+# Standalone notifier classes
+# ---------------------------------------------------------------------------
+
+
+class SlackNotifier:
+    """Sends change-alert notifications to a Slack webhook."""
+
+    def __init__(self, webhook_url: str) -> None:
+        self._webhook_url = webhook_url
+
+    async def notify_scan_diff(self, diff_summary: DiffSummary, target: str) -> None:
+        """Post a diff summary to Slack.
+
+        Args:
+            diff_summary: The :class:`~godrecon.monitoring.diff.DiffSummary` to report.
+            target: Scan target identifier.
+        """
+        if _aiohttp is None:
+            raise RuntimeError("aiohttp is required for Slack notifications")
+        from datetime import datetime  # noqa: PLC0415
+
+        message = _format_message(target, datetime.utcnow().isoformat(), diff_summary)
+        payload = {"text": message}
+        async with _aiohttp.ClientSession() as session:
+            async with session.post(
+                self._webhook_url,
+                json=payload,
+                timeout=_aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+        logger.debug("Slack notification sent for target %s", target)
+
+
+class DiscordNotifier:
+    """Sends change-alert notifications to a Discord webhook."""
+
+    def __init__(self, webhook_url: str) -> None:
+        self._webhook_url = webhook_url
+
+    async def notify_scan_diff(self, diff_summary: DiffSummary, target: str) -> None:
+        """Post a diff summary to Discord.
+
+        Args:
+            diff_summary: The :class:`~godrecon.monitoring.diff.DiffSummary` to report.
+            target: Scan target identifier.
+        """
+        if _aiohttp is None:
+            raise RuntimeError("aiohttp is required for Discord notifications")
+        from datetime import datetime  # noqa: PLC0415
+
+        message = _format_message(target, datetime.utcnow().isoformat(), diff_summary)
+        payload = {"content": message}
+        async with _aiohttp.ClientSession() as session:
+            async with session.post(
+                self._webhook_url,
+                json=payload,
+                timeout=_aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+        logger.debug("Discord notification sent for target %s", target)
+
+
+class WebhookNotifier:
+    """Sends change-alert notifications to a generic HTTP webhook."""
+
+    def __init__(self, url: str, headers: Optional[Dict[str, str]] = None) -> None:
+        self._url = url
+        self._headers: Dict[str, str] = headers or {}
+
+    async def notify_scan_diff(self, diff_summary: DiffSummary, target: str) -> None:
+        """POST a structured JSON payload to the webhook URL.
+
+        Args:
+            diff_summary: The :class:`~godrecon.monitoring.diff.DiffSummary` to report.
+            target: Scan target identifier.
+        """
+        if _aiohttp is None:
+            raise RuntimeError("aiohttp is required for webhook notifications")
+        from datetime import datetime  # noqa: PLC0415
+
+        scan_timestamp = datetime.utcnow().isoformat()
+        message = _format_message(target, scan_timestamp, diff_summary)
+        payload: Dict[str, Any] = {
+            "target": target,
+            "scan_timestamp": scan_timestamp,
+            "message": message,
+            "new_findings": diff_summary.total_new,
+            "resolved_findings": diff_summary.total_resolved,
+            "severity_counts": diff_summary.severity_counts,
+            "new_subdomains": diff_summary.new_subdomains[:20],
+            "new_ports": diff_summary.new_ports[:20],
+        }
+        async with _aiohttp.ClientSession() as session:
+            async with session.post(
+                self._url,
+                json=payload,
+                headers=self._headers,
+                timeout=_aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                resp.raise_for_status()
+        logger.debug("Webhook notification sent for target %s", target)
+
+
+class MonitoringNotifier:
+    """Orchestrator that dispatches scan-diff alerts to all enabled channels.
+
+    Example::
+
+        notifier = MonitoringNotifier(notifications_cfg)
+        await notifier.notify_scan_diff(diff_summary, "example.com")
+    """
+
+    def __init__(self, notifications_cfg: Any) -> None:
+        self._cfg = notifications_cfg
+        self._notifiers: List[Any] = []
+
+        cfg = notifications_cfg
+        if getattr(cfg.slack, "enabled", False) and cfg.slack.webhook_url:
+            self._notifiers.append(SlackNotifier(cfg.slack.webhook_url))
+        if getattr(cfg.discord, "enabled", False) and cfg.discord.webhook_url:
+            self._notifiers.append(DiscordNotifier(cfg.discord.webhook_url))
+        if getattr(cfg.webhook, "enabled", False) and cfg.webhook.url:
+            extra_headers = dict(cfg.webhook.headers) if cfg.webhook.headers else {}
+            self._notifiers.append(WebhookNotifier(cfg.webhook.url, headers=extra_headers))
+
+    async def notify_scan_diff(self, diff_summary: DiffSummary, target: str) -> None:
+        """Dispatch diff alerts to all configured notifiers.
+
+        Failures in individual notifiers are logged but do not propagate.
+
+        Args:
+            diff_summary: The :class:`~godrecon.monitoring.diff.DiffSummary` to report.
+            target: Scan target identifier.
+        """
+        if not self._notifiers:
+            return
+        results = await asyncio.gather(
+            *[n.notify_scan_diff(diff_summary, target) for n in self._notifiers],
+            return_exceptions=True,
+        )
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.warning("MonitoringNotifier backend %d failed: %s", i, result)
