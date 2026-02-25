@@ -74,7 +74,7 @@ class YourScanner(BaseModule):
 
 ## Reporting Bugs
 
-Open an issue on [GitHub Issues](https://github.com/tester122mail69-netizen/recon1/issues) with:
+Open an issue on [GitHub Issues](https://github.com/tester123mail69-cyber/updatedrecontool/issues) with:
 
 - Clear title describing the bug
 - Steps to reproduce

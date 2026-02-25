@@ -17,7 +17,7 @@
 sudo apt update && sudo apt install -y python3 python3-pip python3-venv git
 
 # 2. Clone the repo
-git clone https://github.com/tester122mail69-netizen/recon1.git
+git clone https://github.com/tester123mail69-cyber/updatedrecontool.git
 cd recon1
 
 # 3. Create virtual environment (recommended)
@@ -38,7 +38,7 @@ python main.py version
 brew install python@3.12 git
 
 # 2. Clone and setup
-git clone https://github.com/tester122mail69-netizen/recon1.git
+git clone https://github.com/tester123mail69-cyber/updatedrecontool.git
 cd recon1
 python3 -m venv venv
 source venv/bin/activate
@@ -54,7 +54,7 @@ python main.py version
 # 1. Install Python 3.10+ from python.org (check "Add to PATH")
 # 2. Open PowerShell
 
-git clone https://github.com/tester122mail69-netizen/recon1.git
+git clone https://github.com/tester123mail69-cyber/updatedrecontool.git
 cd recon1
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -85,7 +85,7 @@ These tools enhance GODRECON's capabilities but are not required:
 
 ```bash
 # Clone the repo
-git clone https://github.com/tester122mail69-netizen/recon1.git
+git clone https://github.com/tester123mail69-cyber/updatedrecontool.git
 cd recon1
 
 # Build

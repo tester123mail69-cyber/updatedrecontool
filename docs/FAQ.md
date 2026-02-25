@@ -70,7 +70,7 @@ python3 --version
 ### How do I start my first scan?
 
 ```bash
-git clone https://github.com/tester122mail69-netizen/recon1.git
+git clone https://github.com/tester123mail69-cyber/updatedrecontool.git
 cd recon1
 pip install -r requirements.txt
 python main.py scan --target example.com

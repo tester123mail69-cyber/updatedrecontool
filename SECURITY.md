@@ -10,7 +10,7 @@
 
 If you discover a security vulnerability in GODRECON, please report it responsibly.
 
-**Contact: nothingmch69** via GitHub (open a private security advisory at [https://github.com/tester122mail69-netizen/recon1/security/advisories/new](https://github.com/tester122mail69-netizen/recon1/security/advisories/new))
+**Contact: nothingmch69** via GitHub (open a private security advisory at [https://github.com/tester123mail69-cyber/updatedrecontool/security/advisories/new](https://github.com/tester123mail69-cyber/updatedrecontool/security/advisories/new))
 
 ### Please include:
 
