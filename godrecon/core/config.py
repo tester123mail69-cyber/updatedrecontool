@@ -13,6 +13,12 @@ from typing import Any, Dict, List, Optional
 import yaml
 from pydantic import BaseModel, Field
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 class DNSConfig(BaseModel):
     """DNS resolver configuration."""
