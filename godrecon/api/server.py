@@ -32,6 +32,27 @@ try:
     from godrecon.api.scan_manager import ScanManager
 
     # ---------------------------------------------------------------------------
+    # Rate limiting (optional — gracefully degraded if slowapi not installed)
+    # ---------------------------------------------------------------------------
+
+    try:
+        from slowapi import Limiter
+        from slowapi.util import get_remote_address
+        from slowapi.middleware import SlowAPIMiddleware
+        from slowapi.errors import RateLimitExceeded as _RateLimitExceeded
+
+        _limiter: Optional[Any] = Limiter(default_limits=["60/minute"], key_func=get_remote_address)
+        _slowapi_available = True
+    except ImportError:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "slowapi not installed — rate limiting disabled. "
+            "Install with: pip install 'slowapi>=0.1.9'"
+        )
+        _limiter = None
+        _slowapi_available = False
+
+    # ---------------------------------------------------------------------------
     # Application factory
     # ---------------------------------------------------------------------------
 
@@ -68,6 +89,18 @@ try:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+        # Rate limiting
+        if _slowapi_available:
+            _app.state.limiter = _limiter
+            _app.add_middleware(SlowAPIMiddleware)
+
+            @_app.exception_handler(_RateLimitExceeded)
+            async def _rate_limit_exceeded_handler(request: Any, exc: Any) -> JSONResponse:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit exceeded. Please slow down."},
+                )
 
         scan_manager = ScanManager(max_concurrent_scans=max_concurrent_scans)
         auth_dep = make_api_key_dependency(api_key)
