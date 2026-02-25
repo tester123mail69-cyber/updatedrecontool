@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, parse_qs
 
 from godrecon.utils.http_client import AsyncHTTPClient
 from godrecon.utils.logger import get_logger
@@ -1458,6 +1459,28 @@ def _load_templates() -> List[Dict[str, Any]]:
 class PatternMatcher:
     _SEVERITY_ORDER = ["info", "low", "medium", "high", "critical"]
 
+    # Detector classes to run alongside template-based checks
+    _DETECTOR_CLASSES = [
+        ("godrecon.modules.vulns.detectors.rce_detector", "RCEDetector"),
+        ("godrecon.modules.vulns.detectors.lfi_detector", "LFIDetector"),
+        ("godrecon.modules.vulns.detectors.ssti_detector", "SSTIDetector"),
+        ("godrecon.modules.vulns.detectors.command_injection", "CommandInjectionDetector"),
+        ("godrecon.modules.vulns.detectors.path_traversal", "PathTraversalDetector"),
+        ("godrecon.modules.vulns.detectors.xxe_detector", "XXEDetector"),
+        ("godrecon.modules.vulns.detectors.idor_detector", "IDORDetector"),
+        ("godrecon.modules.vulns.detectors.jwt_detector", "JWTDetector"),
+        ("godrecon.modules.vulns.detectors.auth_bypass", "AuthBypassDetector"),
+        ("godrecon.modules.vulns.detectors.graphql_injection", "GraphQLInjectionDetector"),
+        ("godrecon.modules.vulns.detectors.host_header_injection", "HostHeaderInjectionDetector"),
+        ("godrecon.modules.vulns.detectors.http_smuggling", "HTTPSmugglingDetector"),
+        ("godrecon.modules.vulns.detectors.prototype_pollution", "PrototypePollutionDetector"),
+        ("godrecon.modules.vulns.detectors.deserialization", "DeserializationDetector"),
+        ("godrecon.modules.vulns.detectors.http_verb_tampering", "HTTPVerbTamperingDetector"),
+        ("godrecon.modules.vulns.detectors.websocket_hijacking", "WebSocketHijackingDetector"),
+        ("godrecon.modules.vulns.detectors.race_condition", "RaceConditionDetector"),
+        ("godrecon.modules.vulns.detectors.broken_access_control", "BrokenAccessControlDetector"),
+    ]
+
     def __init__(
         self,
         http_client: AsyncHTTPClient,
@@ -1506,11 +1529,57 @@ class PatternMatcher:
                 )
             elif isinstance(r, Exception):
                 logger.debug("Template check error: %s", r)
+
+        # Run detector-based checks
+        detector_matches = await self._run_detectors(base_url)
+        matches.extend(detector_matches)
+
         logger.info(
             "Pattern matching complete on %s — %d vulnerabilities found",
             base_url, len(matches)
         )
         return matches
+
+    async def _run_detectors(self, base_url: str) -> List[Dict[str, Any]]:
+        """Run all registered detector classes and convert findings to dicts."""
+        import importlib
+
+        parsed = urlparse(base_url)
+        params = list(parse_qs(parsed.query).keys()) or ["id", "q", "page", "file", "path"]
+
+        detector_results: List[Dict[str, Any]] = []
+        for module_path, class_name in self._DETECTOR_CLASSES:
+            try:
+                mod = importlib.import_module(module_path)
+                cls = getattr(mod, class_name)
+                detector = cls(http_client=self._http, safe_mode=self._safe_mode)
+                findings = await detector.scan(base_url, params)
+                for finding in findings:
+                    sev = getattr(finding, "severity", "info")
+                    sev_idx = self._SEVERITY_ORDER.index(sev) if sev in self._SEVERITY_ORDER else 0
+                    if sev_idx < self._threshold_idx:
+                        continue
+                    detector_results.append({
+                        "template_id": f"detector-{class_name.lower()}",
+                        "name": getattr(finding, "title", class_name),
+                        "severity": sev,
+                        "category": class_name.lower().replace("detector", "").strip("_"),
+                        "confirmed": sev in ("critical", "high"),
+                        "note": "",
+                        "url": base_url,
+                        "remediation": "",
+                        "status_code": None,
+                        "method": "GET",
+                    })
+                    logger.info(
+                        "DETECTOR VULN [%s] %s | %s",
+                        sev.upper(),
+                        getattr(finding, "title", class_name),
+                        base_url,
+                    )
+            except Exception as exc:
+                logger.debug("Detector %s failed: %s", class_name, exc)
+        return detector_results
 
     def _is_eligible(self, template: Dict[str, Any]) -> bool:
         sev = template.get("severity", "info")

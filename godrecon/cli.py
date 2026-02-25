@@ -81,6 +81,22 @@ def scan(
     deep: bool = typer.Option(False, "--deep", help="Enable deep scan mode (exhaustive, no timeouts)"),
     min_confidence: float = typer.Option(0.5, "--min-confidence", help="Minimum confidence threshold for findings (0.0-1.0)"),
     resume: bool = typer.Option(False, "--resume", help="Resume interrupted scan from saved intermediate results"),
+    # Authentication options
+    auth_cookie: Optional[str] = typer.Option(None, "--auth-cookie", help="Session cookie for authenticated scanning (format: name=value)"),
+    auth_token: Optional[str] = typer.Option(None, "--auth-token", help="Bearer token for authenticated scanning"),
+    auth_header: Optional[str] = typer.Option(None, "--auth-header", help="Custom auth header (format: Header-Name=value)"),
+    # Module options
+    nuclei: bool = typer.Option(True, "--nuclei/--no-nuclei", help="Run Nuclei templates"),
+    oob: bool = typer.Option(False, "--oob", help="Enable OOB detection"),
+    fuzzing: bool = typer.Option(False, "--fuzzing", help="Enable fuzzing engine"),
+    param_discovery: bool = typer.Option(True, "--param-discovery/--no-param-discovery", help="Enable parameter discovery"),
+    # Scan options
+    waf_bypass: bool = typer.Option(False, "--waf-bypass", help="Enable WAF bypass techniques"),
+    git_dork: bool = typer.Option(False, "--git-dork", help="Enable GitHub/GitLab dorking"),
+    supply_chain: bool = typer.Option(True, "--supply-chain/--no-supply-chain", help="Enable supply chain analysis"),
+    js_secrets: bool = typer.Option(True, "--js-secrets/--no-js-secrets", help="Enable JS secrets scanning"),
+    # Report options
+    report_format: Optional[str] = typer.Option(None, "--report-format", help="Report format: json,html,markdown,pdf,hackerone,bugcrowd"),
 ) -> None:
     """[bold]Run a reconnaissance scan against a target.[/]
 
@@ -141,6 +157,28 @@ def scan(
         cfg.general.cross_validate = verify
     elif full:
         cfg.general.cross_validate = True
+
+    # Auth options
+    if auth_cookie:
+        name, _, value = auth_cookie.partition("=")
+        cfg.auth.cookies[name] = value
+    if auth_token:
+        cfg.auth.bearer_token = auth_token
+        cfg.auth.enabled = True
+    if auth_header:
+        name, _, value = auth_header.partition("=")
+        cfg.auth.headers[name] = value
+        cfg.auth.enabled = True
+
+    # Module flags
+    cfg.modules.nuclei = nuclei
+    cfg.modules.oob = oob
+    cfg.modules.fuzzing = fuzzing
+    cfg.modules.param_discovery = param_discovery
+    cfg.waf.apply_bypass = waf_bypass
+    cfg.modules.git_dorking = git_dork
+    cfg.modules.supply_chain = supply_chain
+    cfg.modules.js_secrets = js_secrets
 
     if not silent:
         console.print(
@@ -484,6 +522,92 @@ def schedules(
     else:
         err_console.print(f"[red]Unknown action: {action!r}. Use list, add, or remove.[/]")
         raise typer.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# diff command
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def diff(
+    scan1: str = typer.Argument(..., help="Path to first scan result JSON file"),
+    scan2: str = typer.Argument(..., help="Path to second scan result JSON file"),
+) -> None:
+    """Compare two scan results and show differences."""
+    import json
+    from godrecon.monitoring.diff import ScanDiffer
+
+    with open(scan1) as f:
+        old = json.load(f)
+    with open(scan2) as f:
+        new = json.load(f)
+
+    differ = ScanDiffer()
+    summary = differ.diff(old, new)
+
+    if not summary.has_changes:
+        console.print("[green]No changes detected between scans.[/]")
+        return
+
+    console.print(f"\n[bold]Scan Diff Summary[/]")
+    console.print(f"New findings: [red]{summary.total_new}[/]")
+    console.print(f"Resolved findings: [green]{summary.total_resolved}[/]")
+
+    if summary.new_subdomains:
+        console.print(f"\nNew subdomains: {', '.join(summary.new_subdomains)}")
+    if summary.new_ports:
+        console.print(f"New ports: {', '.join(summary.new_ports)}")
+
+    for sev, count in summary.severity_counts.items():
+        console.print(f"  {sev}: {count} new")
+
+
+# ---------------------------------------------------------------------------
+# report command
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def report(
+    scan_file: str = typer.Argument(..., help="Path to scan result JSON file"),
+    output: str = typer.Option("report", "--output", "-o", help="Output file path (without extension)"),
+    fmt: str = typer.Option("markdown", "--format", "-f", help="Report format: markdown, hackerone, bugcrowd"),
+) -> None:
+    """Generate bug bounty report from scan results."""
+    import json
+    from godrecon.reporting.bug_report import BugReportGenerator
+
+    with open(scan_file) as f:
+        scan_data = json.load(f)
+
+    target = scan_data.get("target", "unknown")
+    module_results = scan_data.get("module_results", {})
+
+    all_findings = []
+    for module_name, module_result in module_results.items():
+        if isinstance(module_result, dict):
+            findings = module_result.get("findings", [])
+        elif hasattr(module_result, "findings"):
+            findings = module_result.findings or []
+        else:
+            findings = []
+        all_findings.extend(findings)
+
+    generator = BugReportGenerator()
+    reports = generator.generate_batch(all_findings, target, platform=fmt if fmt in ("hackerone", "bugcrowd") else "hackerone")
+
+    if fmt in ("hackerone", "bugcrowd"):
+        import json as json_mod
+        output_path = f"{output}.json"
+        data = [r.to_hackerone_format() if fmt == "hackerone" else r.to_bugcrowd_format() for r in reports]
+        Path(output_path).write_text(json_mod.dumps(data, indent=2))
+    else:
+        output_path = f"{output}.md"
+        content = "\n\n---\n\n".join(r.to_markdown() for r in reports)
+        Path(output_path).write_text(content)
+
+    console.print(f"[green]Generated {len(reports)} report(s) → {output_path}[/]")
 
 
 if __name__ == "__main__":

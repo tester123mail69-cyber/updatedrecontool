@@ -28,7 +28,8 @@ _SUBDOMAIN_DEPS: Set[str] = {
     "http", "http_probe", "dns", "ports", "ssl",
     "tech", "takeover", "vulns", "cloud",
     "content_discovery", "api_intel", "crawl", "network", "visual",
-    "screenshots", "email_sec",
+    "screenshots", "email_sec", "js_secrets", "param_discovery",
+    "waf", "fuzzing", "supply_chain", "nuclei",
 }
 
 

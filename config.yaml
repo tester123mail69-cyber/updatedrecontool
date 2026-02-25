@@ -34,6 +34,15 @@ modules:
   api_intel: true
   content_discovery: true
   network: true
+  visual: true
+  js_secrets: true
+  param_discovery: true
+  waf: true
+  fuzzing: false
+  supply_chain: true
+  git_dorking: true
+  oob: false
+  nuclei: true
 
 subdomains:
   enabled: true
@@ -88,6 +97,9 @@ api_keys:
   hunter: ""
   github: ""
   fullhunt: ""
+  nvd: ""
+  gitlab: ""
+  shodan_facets: ""
 
 reporting:
   auto_report: true
@@ -247,3 +259,68 @@ dashboard:
   enabled: true
   host: "127.0.0.1"
   port: 8000
+
+auth:
+  enabled: false
+  cookies: {}
+  headers: {}
+  bearer_token: ""
+  api_key: ""
+  api_key_header: "X-API-Key"
+  login_url: ""
+  login_data: {}
+  session_renewal_url: ""
+
+nuclei:
+  enabled: true
+  binary_path: "nuclei"
+  templates_dir: ""
+  auto_update: true
+  severity:
+    - critical
+    - high
+    - medium
+    - low
+  concurrency: 25
+  timeout: 30
+
+oob:
+  enabled: false
+  server_url: ""
+  interactsh_server: "https://oast.pro"
+  use_interactsh: false
+  callback_timeout: 30
+
+js_secrets:
+  enabled: true
+  entropy_threshold: 4.0
+  max_js_files: 100
+  check_active: false
+
+git_dork:
+  enabled: true
+  max_results: 50
+  search_gitlab: false
+  gitlab_url: "https://gitlab.com"
+
+waf:
+  enabled: true
+  apply_bypass: true
+
+fuzzing:
+  enabled: false
+  max_mutations: 50
+  timeout: 10.0
+  detect_anomalies: true
+
+param_discovery:
+  enabled: true
+  brute_force: true
+  mine_js: true
+  extract_forms: true
+  max_params: 100
+
+supply_chain:
+  enabled: true
+  check_sri: true
+  check_vulnerable_versions: true
