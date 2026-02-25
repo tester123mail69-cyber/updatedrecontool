@@ -27,15 +27,6 @@ try:
 
     router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-    # Mount static files
-    if _STATIC_DIR.exists():
-        from starlette.staticfiles import StaticFiles as StarletteStaticFiles
-        router.mount(
-            "/static",
-            StarletteStaticFiles(directory=str(_STATIC_DIR)),
-            name="dashboard-static",
-        )
-
     # -------------------------------------------------------------------------
     # In-memory stores
     # -------------------------------------------------------------------------

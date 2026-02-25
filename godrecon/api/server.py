@@ -72,6 +72,16 @@ try:
         # Attach scan_manager to app state so the dashboard router can access it
         _app.state.scan_manager = scan_manager
 
+        # Mount dashboard static files at /dashboard/static
+        try:
+            from pathlib import Path as _Path
+            from fastapi.staticfiles import StaticFiles as _StaticFiles
+            _static_dir = _Path(__file__).parent.parent / "dashboard" / "static"
+            if _static_dir.exists():
+                _app.mount("/dashboard/static", _StaticFiles(directory=str(_static_dir)), name="dashboard-static")
+        except Exception:  # noqa: BLE001
+            pass
+
         # Mount dashboard router (Jinja2 templates served at /dashboard/*)
         try:
             from godrecon.dashboard.routes import router as dashboard_router
