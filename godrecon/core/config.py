@@ -33,6 +33,8 @@ class SubdomainPermutationConfig(BaseModel):
     """Permutation scanner configuration."""
 
     enabled: bool = True
+    depth: int = 2
+    patterns: List[str] = Field(default_factory=lambda: ["dev", "staging", "test", "api", "admin", "internal"])
 
 
 class SubdomainRecursiveConfig(BaseModel):
@@ -108,6 +110,19 @@ class ModulesConfig(BaseModel):
     git_dorking: bool = True
     oob: bool = False  # disabled by default (needs external server)
     nuclei: bool = True
+    passive_recon: bool = True
+    mobile_api: bool = False
+    vuln_chaining: bool = True
+    cloud_misconfig: bool = True
+    subdomain_permutation: bool = True
+    broken_auth: bool = True
+    collaboration: bool = False
+    bug_bounty: bool = True
+    browser_extension: bool = True
+    wayback_mining: bool = True
+    business_logic: bool = True
+    multi_region: bool = False
+    cache_poisoning: bool = True
 
 
 class HttpProbeConfig(BaseModel):
@@ -195,6 +210,9 @@ class APIKeysConfig(BaseModel):
     nvd: str = ""
     gitlab: str = ""
     shodan_facets: str = ""
+    openai: str = ""
+    anthropic: str = ""
+    gemini: str = ""
 
 
 class ReportingConfig(BaseModel):
@@ -485,6 +503,103 @@ class SupplyChainConfig(BaseModel):
     check_vulnerable_versions: bool = True
 
 
+class AIValidatorConfig(BaseModel):
+    """AI-powered validator configuration."""
+    provider: str = "pattern"  # pattern, openai, anthropic, gemini, ollama
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3"
+    confidence_threshold: float = 0.7
+
+
+class PassiveReconConfig(BaseModel):
+    """Passive recon configuration."""
+    enabled: bool = True
+
+
+class MobileAPIConfig(BaseModel):
+    """Mobile API extractor configuration."""
+    enabled: bool = False
+    apk_paths: List[str] = Field(default_factory=list)
+
+
+class VulnChainingConfig(BaseModel):
+    """Vulnerability chaining configuration."""
+    enabled: bool = True
+
+
+class CloudMisconfigConfig(BaseModel):
+    """Cloud misconfiguration scanner configuration."""
+    enabled: bool = True
+    check_s3: bool = True
+    check_azure: bool = True
+    check_gcp: bool = True
+    check_firebase: bool = True
+    check_k8s: bool = True
+    check_metadata: bool = True
+
+
+class BrokenAuthConfig(BaseModel):
+    """Broken authentication scanner configuration."""
+    enabled: bool = True
+    test_password_reset: bool = True
+    test_2fa_bypass: bool = True
+    test_oauth: bool = True
+    test_jwt: bool = True
+
+
+class CollaborationConfig(BaseModel):
+    """Real-time collaboration configuration."""
+    enabled: bool = False
+    host: str = "127.0.0.1"
+    port: int = 8765
+
+
+class BugBountyConfig(BaseModel):
+    """Bug bounty program matcher configuration."""
+    enabled: bool = True
+
+
+class BrowserExtensionConfig(BaseModel):
+    """Browser extension analyzer configuration."""
+    enabled: bool = True
+
+
+class WaybackMiningConfig(BaseModel):
+    """Wayback Machine mining configuration."""
+    enabled: bool = True
+    sources: List[str] = Field(default_factory=lambda: ["wayback", "commoncrawl", "otx"])
+
+
+class BusinessLogicConfig(BaseModel):
+    """Business logic flaw detector configuration."""
+    enabled: bool = True
+
+
+class MultiRegionConfig(BaseModel):
+    """Multi-region scanning configuration."""
+    enabled: bool = False
+    proxies: Dict[str, str] = Field(default_factory=dict)
+
+
+class SmartScoringConfig(BaseModel):
+    """Smart priority scoring configuration."""
+    enabled: bool = True
+
+
+class CachePoisoningConfig(BaseModel):
+    """Cache poisoning scanner configuration."""
+    enabled: bool = True
+
+
+class ScanModeConfig(BaseModel):
+    """Scan mode configuration."""
+    mode: str = "standard"  # quick, standard, deep, continuous
+    continuous_interval: int = 3600
+
+
 class Config(BaseModel):
     """Top-level GODRECON configuration."""
 
@@ -522,6 +637,22 @@ class Config(BaseModel):
     fuzzing: FuzzingConfig = Field(default_factory=FuzzingConfig)
     param_discovery: ParamDiscoveryConfig = Field(default_factory=ParamDiscoveryConfig)
     supply_chain: SupplyChainConfig = Field(default_factory=SupplyChainConfig)
+    ai_validator: AIValidatorConfig = Field(default_factory=AIValidatorConfig)
+    passive_recon: PassiveReconConfig = Field(default_factory=PassiveReconConfig)
+    mobile_api: MobileAPIConfig = Field(default_factory=MobileAPIConfig)
+    vuln_chaining: VulnChainingConfig = Field(default_factory=VulnChainingConfig)
+    cloud_misconfig: CloudMisconfigConfig = Field(default_factory=CloudMisconfigConfig)
+    subdomain_permutation_config: SubdomainPermutationConfig = Field(default_factory=SubdomainPermutationConfig)
+    broken_auth: BrokenAuthConfig = Field(default_factory=BrokenAuthConfig)
+    collaboration_config: CollaborationConfig = Field(default_factory=CollaborationConfig)
+    bug_bounty_config: BugBountyConfig = Field(default_factory=BugBountyConfig)
+    browser_extension_config: BrowserExtensionConfig = Field(default_factory=BrowserExtensionConfig)
+    wayback_mining_config: WaybackMiningConfig = Field(default_factory=WaybackMiningConfig)
+    business_logic_config: BusinessLogicConfig = Field(default_factory=BusinessLogicConfig)
+    multi_region_config: MultiRegionConfig = Field(default_factory=MultiRegionConfig)
+    smart_scoring: SmartScoringConfig = Field(default_factory=SmartScoringConfig)
+    cache_poisoning_config: CachePoisoningConfig = Field(default_factory=CachePoisoningConfig)
+    scan_mode: ScanModeConfig = Field(default_factory=ScanModeConfig)
 
 
 def load_config(config_path: Optional[str] = None) -> Config:

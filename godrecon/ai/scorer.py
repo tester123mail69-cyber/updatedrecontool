@@ -188,3 +188,91 @@ class RiskScorer:
             f"{risk_desc}\n\n"
             f"Total findings: {total} ({severity_summary}).\n"
         )
+
+
+# Priority colour coding
+_PRIORITY_COLORS = {
+    (80, 100): "red",
+    (60, 79): "orange",
+    (40, 59): "yellow",
+    (20, 39): "blue",
+    (0, 19): "green",
+}
+
+
+class SmartPriorityScorer:
+    """AI-calculated priority scorer for individual findings.
+
+    Computes a 0–100 priority score per finding based on exploitability,
+    impact, asset value, payout history, and confidence.
+    """
+
+    _EXPLOITABILITY: Dict[str, float] = {
+        "critical": 1.0,
+        "high": 0.8,
+        "medium": 0.55,
+        "low": 0.3,
+        "info": 0.1,
+    }
+
+    _PAYOUT_HISTORY: Dict[str, float] = {
+        "rce": 1.0,
+        "sql": 0.9,
+        "ssrf": 0.85,
+        "xxe": 0.8,
+        "xss": 0.6,
+        "idor": 0.7,
+        "csrf": 0.4,
+        "redirect": 0.3,
+        "info": 0.1,
+    }
+
+    def priority_score(self, finding: Finding, asset_value: float = 0.5) -> int:
+        """Compute a 0–100 priority score for a single finding.
+
+        Args:
+            finding: The finding to score.
+            asset_value: Relative importance of the asset (0.0–1.0).
+
+        Returns:
+            Integer priority score 0–100.
+        """
+        exploitability = self._EXPLOITABILITY.get(finding.severity.lower(), 0.5)
+
+        payout = 0.3
+        combined = (finding.title + " ".join(finding.tags)).lower()
+        for key, val in self._PAYOUT_HISTORY.items():
+            if key in combined:
+                payout = val
+                break
+
+        confidence = getattr(finding, "confidence", 1.0)
+        impact = 1.0 if finding.severity.lower() in ("critical", "high") else 0.5
+
+        raw = (exploitability * 0.3 + impact * 0.25 + payout * 0.2
+               + asset_value * 0.15 + confidence * 0.1) * 100
+        return min(100, max(0, round(raw)))
+
+    def color(self, score: int) -> str:
+        """Return a colour name for the given priority score."""
+        for (low, high), colour in _PRIORITY_COLORS.items():
+            if low <= score <= high:
+                return colour
+        return "green"
+
+    def rank_findings(
+        self, findings: List[Finding], asset_value: float = 0.5
+    ) -> List[Dict[str, Any]]:
+        """Return findings sorted by priority score descending."""
+        ranked = []
+        for finding in findings:
+            score = self.priority_score(finding, asset_value)
+            ranked.append({
+                "title": finding.title,
+                "severity": finding.severity,
+                "description": finding.description,
+                "priority_score": score,
+                "color": self.color(score),
+                "tags": finding.tags,
+            })
+        return sorted(ranked, key=lambda x: x["priority_score"], reverse=True)
