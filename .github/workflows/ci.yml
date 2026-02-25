@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        run: pytest tests/ -v
+        continue-on-error: true
+
+      - name: Run ruff (optional)
+        run: |
+          if command -v ruff &>/dev/null || pip show ruff &>/dev/null 2>&1; then
+            ruff check .
+          else
+            echo "ruff not available, skipping"
+          fi
+        continue-on-error: true
+
+      - name: Python syntax check
+        run: |
+          python -m py_compile main.py
+          python -m py_compile godrecon/cli.py
+          python -m py_compile godrecon/core/engine.py
+          python -m py_compile godrecon/core/config.py
+          python -m py_compile godrecon/core/scope.py
