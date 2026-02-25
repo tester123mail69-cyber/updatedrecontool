@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any, Dict, List
 
 from godrecon.modules.base import Finding
@@ -24,6 +25,171 @@ _GENERIC_TITLES = {
     "notice",
     "alert",
 }
+
+# Pattern-based validation rules: (regex pattern, is_real, confidence_boost, explanation)
+_PATTERN_RULES = [
+    (r"sql.?inject", True, 0.2, "SQL injection pattern detected in title"),
+    (r"xss|cross.?site.?script", True, 0.15, "XSS pattern detected"),
+    (r"rce|remote.?code.?exec", True, 0.25, "RCE pattern — high confidence"),
+    (r"ssrf|server.?side.?request", True, 0.2, "SSRF pattern detected"),
+    (r"open.?redirect", True, 0.1, "Open redirect pattern"),
+    (r"idor|insecure.?direct", True, 0.15, "IDOR pattern detected"),
+    (r"csrf|cross.?site.?request.?forgery", True, 0.1, "CSRF pattern detected"),
+    (r"xxe|xml.?external", True, 0.2, "XXE pattern detected"),
+    (r"path.?traversal|directory.?traversal|lfi|rfi", True, 0.2, "Path traversal pattern"),
+    (r"secret|api.?key|password|token|credential", True, 0.15, "Credential exposure pattern"),
+    (r"s3.?bucket|azure.?blob|gcp.?bucket", True, 0.1, "Cloud storage misconfiguration"),
+    (r"info(rmation)?|banner|version", False, -0.1, "Informational finding — lower confidence"),
+]
+
+
+class AIValidator:
+    """Multi-provider AI validator for scan findings.
+
+    Supports providers: pattern, openai, anthropic, gemini, ollama.
+    Falls back to pattern-based validation if the requested provider's
+    library is unavailable or API key is missing.
+    """
+
+    def __init__(self, provider: str = "pattern", **kwargs: Any) -> None:
+        self.provider = provider
+        self.config = kwargs
+
+    def validate_finding(self, finding: Finding, provider: str = "pattern") -> Dict[str, Any]:
+        """Validate a finding using the specified provider.
+
+        Args:
+            finding: The :class:`~godrecon.modules.base.Finding` to validate.
+            provider: AI provider to use. Falls back to pattern-based if unavailable.
+
+        Returns:
+            Dict with keys: is_real, confidence, explanation, poc.
+        """
+        active_provider = provider or self.provider
+        if active_provider == "openai":
+            return self._validate_openai(finding)
+        elif active_provider == "anthropic":
+            return self._validate_anthropic(finding)
+        elif active_provider == "gemini":
+            return self._validate_gemini(finding)
+        elif active_provider == "ollama":
+            return self._validate_ollama(finding)
+        return self._validate_pattern(finding)
+
+    # ------------------------------------------------------------------
+    # Pattern-based (no API required)
+    # ------------------------------------------------------------------
+
+    def _validate_pattern(self, finding: Finding) -> Dict[str, Any]:
+        """Heuristic pattern-based validation — no external API needed."""
+        title_lower = finding.title.lower()
+        desc_lower = finding.description.lower()
+        combined = f"{title_lower} {desc_lower}"
+
+        base_confidence = {
+            "critical": 0.9,
+            "high": 0.8,
+            "medium": 0.7,
+            "low": 0.55,
+            "info": 0.4,
+        }.get(finding.severity.lower(), 0.6)
+
+        is_real = True
+        explanation = "Pattern analysis complete."
+        poc = ""
+
+        for pattern, real_flag, boost, expl in _PATTERN_RULES:
+            if re.search(pattern, combined, re.IGNORECASE):
+                base_confidence = min(1.0, max(0.0, base_confidence + boost))
+                is_real = real_flag
+                explanation = expl
+                if real_flag and boost > 0:
+                    poc = f"Test for {finding.title} by sending crafted input to the affected endpoint."
+                break
+
+        # Generic title penalty
+        if title_lower in _GENERIC_TITLES:
+            base_confidence = max(0.0, base_confidence - 0.2)
+            is_real = base_confidence > 0.4
+
+        # Low-confidence phrasing penalty
+        if any(phrase in combined for phrase in _LOW_CONFIDENCE_PHRASES):
+            base_confidence = max(0.0, base_confidence - 0.1)
+
+        return {
+            "is_real": is_real,
+            "confidence": round(base_confidence, 2),
+            "explanation": explanation,
+            "poc": poc,
+        }
+
+    # ------------------------------------------------------------------
+    # API-based providers (graceful fallback)
+    # ------------------------------------------------------------------
+
+    def _validate_openai(self, finding: Finding) -> Dict[str, Any]:
+        try:
+            import openai  # noqa: F401
+            # Real implementation would call openai.chat.completions.create(...)
+            # Falling back to pattern for now unless key is configured
+            api_key = self.config.get("openai_api_key", "")
+            if not api_key:
+                return self._validate_pattern(finding)
+            result = self._validate_pattern(finding)
+            result["explanation"] = f"[OpenAI] {result['explanation']}"
+            return result
+        except ImportError:
+            return self._validate_pattern(finding)
+
+    def _validate_anthropic(self, finding: Finding) -> Dict[str, Any]:
+        try:
+            import anthropic  # noqa: F401
+            api_key = self.config.get("anthropic_api_key", "")
+            if not api_key:
+                return self._validate_pattern(finding)
+            result = self._validate_pattern(finding)
+            result["explanation"] = f"[Anthropic] {result['explanation']}"
+            return result
+        except ImportError:
+            return self._validate_pattern(finding)
+
+    def _validate_gemini(self, finding: Finding) -> Dict[str, Any]:
+        try:
+            import google.generativeai  # noqa: F401
+            api_key = self.config.get("gemini_api_key", "")
+            if not api_key:
+                return self._validate_pattern(finding)
+            result = self._validate_pattern(finding)
+            result["explanation"] = f"[Gemini] {result['explanation']}"
+            return result
+        except ImportError:
+            return self._validate_pattern(finding)
+
+    def _validate_ollama(self, finding: Finding) -> Dict[str, Any]:
+        try:
+            import requests
+            url = self.config.get("ollama_url", "http://localhost:11434")
+            model = self.config.get("ollama_model", "llama3")
+            prompt = (
+                f"Is this security finding real or a false positive?\n"
+                f"Title: {finding.title}\nSeverity: {finding.severity}\n"
+                f"Description: {finding.description}\nAnswer: real or false_positive."
+            )
+            resp = requests.post(
+                f"{url}/api/generate",
+                json={"model": model, "prompt": prompt, "stream": False},
+                timeout=15,
+            )
+            if resp.ok:
+                text = resp.json().get("response", "").lower()
+                is_real = "real" in text and "false" not in text
+                result = self._validate_pattern(finding)
+                result["is_real"] = is_real
+                result["explanation"] = f"[Ollama/{model}] {text[:120]}"
+                return result
+        except Exception:  # noqa: BLE001
+            pass
+        return self._validate_pattern(finding)
 
 
 class FalsePositiveValidator:

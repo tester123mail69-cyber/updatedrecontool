@@ -97,6 +97,13 @@ def scan(
     js_secrets: bool = typer.Option(True, "--js-secrets/--no-js-secrets", help="Enable JS secrets scanning"),
     # Report options
     report_format: Optional[str] = typer.Option(None, "--report-format", help="Report format: json,html,markdown,pdf,hackerone,bugcrowd"),
+    # New scan mode options
+    scan_mode: str = typer.Option("standard", "--mode", "-m", help="Scan mode: quick, standard, deep, continuous"),
+    ai_provider: str = typer.Option("pattern", "--ai-provider", help="AI validation provider: pattern, openai, anthropic, gemini, ollama"),
+    passive_recon: bool = typer.Option(True, "--passive-recon/--no-passive-recon", help="Enable passive recon (Shodan, Censys, etc.)"),
+    mobile_apk: Optional[str] = typer.Option(None, "--apk", help="APK file path for mobile API extraction"),
+    wayback: bool = typer.Option(True, "--wayback/--no-wayback", help="Enable Wayback Machine mining"),
+    cache_poisoning: bool = typer.Option(True, "--cache-poisoning/--no-cache-poisoning", help="Enable cache poisoning scanner"),
 ) -> None:
     """[bold]Run a reconnaissance scan against a target.[/]
 
@@ -179,6 +186,34 @@ def scan(
     cfg.modules.git_dorking = git_dork
     cfg.modules.supply_chain = supply_chain
     cfg.modules.js_secrets = js_secrets
+
+    # New module flags
+    cfg.modules.passive_recon = passive_recon
+    cfg.modules.wayback_mining = wayback
+    cfg.modules.cache_poisoning = cache_poisoning
+    if mobile_apk:
+        cfg.mobile_api.enabled = True
+        cfg.mobile_api.apk_paths = [mobile_apk]
+        cfg.modules.mobile_api = True
+
+    # AI provider config
+    cfg.ai_validator.provider = ai_provider
+
+    # Scan mode configuration
+    if scan_mode == "quick":
+        cfg.modules.fuzzing = False
+        cfg.modules.nuclei = False
+        cfg.modules.multi_region = False
+        cfg.modules.collaboration = False
+        cfg.scan_mode.mode = "quick"
+    elif scan_mode == "deep":
+        for field_name in cfg.modules.model_fields:
+            setattr(cfg.modules, field_name, True)
+        cfg.scan_mode.mode = "deep"
+    elif scan_mode == "continuous":
+        cfg.scan_mode.mode = "continuous"
+    else:
+        cfg.scan_mode.mode = "standard"
 
     if not silent:
         console.print(
