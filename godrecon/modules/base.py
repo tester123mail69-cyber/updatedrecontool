@@ -25,6 +25,9 @@ class Finding:
         severity: Severity level string (``info``, ``low``, ``medium``, ``high``, ``critical``).
         data: Arbitrary extra data associated with the finding.
         tags: List of classification tags.
+        confidence: Confidence score 0.0–1.0 (1.0 = fully verified).
+        source_module: Name of the module that produced this finding.
+        evidence: Raw evidence string supporting the finding.
     """
 
     title: str
@@ -32,6 +35,9 @@ class Finding:
     severity: str = "info"
     data: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    confidence: float = 1.0
+    source_module: str = ""
+    evidence: str = ""
 
 
 @dataclass

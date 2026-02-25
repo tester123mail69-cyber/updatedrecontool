@@ -23,6 +23,9 @@ def _serialize_finding(f: Finding) -> Dict[str, Any]:
         "title": f.title,
         "description": f.description,
         "severity": f.severity,
+        "confidence": f.confidence,
+        "source_module": f.source_module,
+        "evidence": f.evidence,
         "data": f.data,
         "tags": f.tags,
     }
@@ -102,6 +105,9 @@ class JSONReporter:
             "summary": {
                 "total_findings": len(all_findings),
                 "findings_by_severity": sev_counts,
+                "module_health": results.get("stats", {}).get("module_health", {}),
+                "modules_ok": results.get("stats", {}).get("modules_ok"),
+                "modules_with_errors": results.get("stats", {}).get("modules_with_errors"),
             },
             "findings": [_serialize_finding(f) for f in all_findings],
             "module_results": serialized_modules,

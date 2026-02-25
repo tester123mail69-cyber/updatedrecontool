@@ -23,11 +23,29 @@ logger = get_logger(__name__)
 _DEFAULT_USER_AGENTS: List[str] = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.2 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/120.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36",
     "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+    "curl/8.4.0",
+    "python-httpx/0.25.2",
 ]
+
+# TTL-based cache entry: (response_dict, expires_at)
+_CacheEntry = Tuple[Dict[str, Any], float]
 
 
 class AsyncHTTPClient:
@@ -43,7 +61,9 @@ class AsyncHTTPClient:
     def __init__(
         self,
         timeout: int = 10,
-        max_connections: int = 100,
+        connect_timeout: int = 5,
+        max_connections: int = 200,
+        keepalive_timeout: int = 30,
         retries: int = 3,
         retry_delay: float = 1.0,
         user_agents: Optional[List[str]] = None,
@@ -51,12 +71,15 @@ class AsyncHTTPClient:
         verify_ssl: bool = True,
         rate_limit: float = 0.0,
         headers: Optional[Dict[str, str]] = None,
+        cache_ttl: int = 60,
     ) -> None:
         """Initialise the client (does *not* open a session yet).
 
         Args:
-            timeout: Request timeout in seconds.
+            timeout: Total request timeout in seconds.
+            connect_timeout: TCP connect timeout in seconds.
             max_connections: Maximum simultaneous TCP connections.
+            keepalive_timeout: Keep-alive timeout in seconds.
             retries: Number of retry attempts on transient failures.
             retry_delay: Base delay between retries (doubles each attempt).
             user_agents: Pool of User-Agent strings to rotate.
@@ -64,9 +87,12 @@ class AsyncHTTPClient:
             verify_ssl: Whether to verify TLS certificates.
             rate_limit: Minimum seconds between requests (0 = unlimited).
             headers: Additional default headers sent with every request.
+            cache_ttl: TTL in seconds for cached responses (0 = no caching).
         """
         self._timeout = timeout
+        self._connect_timeout = connect_timeout
         self._max_connections = max_connections
+        self._keepalive_timeout = keepalive_timeout
         self._retries = retries
         self._retry_delay = retry_delay
         self._user_agents = user_agents or _DEFAULT_USER_AGENTS
@@ -76,7 +102,8 @@ class AsyncHTTPClient:
         self._default_headers: Dict[str, str] = headers or {}
         self._session: Optional[ClientSession] = None
         self._last_request: float = 0.0
-        self._cache: Dict[str, Any] = {}
+        self._cache: Dict[str, _CacheEntry] = {}
+        self._cache_ttl = cache_ttl
 
     # ------------------------------------------------------------------
     # Context manager
@@ -100,8 +127,13 @@ class AsyncHTTPClient:
             limit=self._max_connections,
             ssl=self._verify_ssl or None,
             ttl_dns_cache=300,
+            keepalive_timeout=self._keepalive_timeout,
+            enable_cleanup_closed=True,
         )
-        timeout = ClientTimeout(total=self._timeout)
+        timeout = ClientTimeout(
+            total=self._timeout,
+            connect=self._connect_timeout,
+        )
         self._session = ClientSession(
             connector=connector,
             timeout=timeout,
@@ -201,6 +233,17 @@ class AsyncHTTPClient:
     # Core request logic
     # ------------------------------------------------------------------
 
+    def _get_cached(self, url: str) -> Optional[Dict[str, Any]]:
+        """Return cached response if present and not expired."""
+        entry = self._cache.get(url)
+        if entry is None:
+            return None
+        response, expires_at = entry
+        if time.monotonic() > expires_at:
+            del self._cache[url]
+            return None
+        return response
+
     async def _request(
         self,
         method: str,
@@ -222,8 +265,10 @@ class AsyncHTTPClient:
         Raises:
             aiohttp.ClientError: After all retries are exhausted.
         """
-        if use_cache and url in self._cache:
-            return self._cache[url]
+        if use_cache:
+            cached = self._get_cached(url)
+            if cached is not None:
+                return cached
 
         if self._session is None:
             await self._create_session()
@@ -259,13 +304,14 @@ class AsyncHTTPClient:
                         "body": body,
                         "url": str(resp.url),
                     }
-                    if use_cache:
-                        self._cache[url] = response
+                    if use_cache and self._cache_ttl > 0:
+                        self._cache[url] = (response, time.monotonic() + self._cache_ttl)
                     return response
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 last_exc = exc
                 if attempt < self._retries:
-                    backoff = self._retry_delay * (2 ** attempt)
+                    # Exponential backoff with jitter
+                    backoff = self._retry_delay * (2 ** attempt) + random.uniform(0, 0.5)
                     logger.debug(
                         "Request to %s failed (attempt %d/%d): %s — retrying in %.1fs",
                         url,
@@ -277,5 +323,6 @@ class AsyncHTTPClient:
                     await asyncio.sleep(backoff)
 
         raise last_exc or aiohttp.ClientError(f"Request failed: {url}")
+
 
 

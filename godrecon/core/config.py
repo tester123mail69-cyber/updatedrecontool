@@ -200,6 +200,8 @@ class GeneralConfig(BaseModel):
     threads: int = 50
     timeout: int = 10
     retries: int = 3
+    module_timeout: int = 300
+    cross_validate: bool = False
     user_agents: List[str] = Field(
         default_factory=lambda: [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

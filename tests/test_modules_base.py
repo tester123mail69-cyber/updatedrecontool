@@ -19,6 +19,9 @@ def test_finding_defaults():
     assert f.severity == "info"
     assert f.data == {}
     assert f.tags == []
+    assert f.confidence == 1.0
+    assert f.source_module == ""
+    assert f.evidence == ""
 
 
 def test_module_result_defaults():
@@ -39,6 +42,18 @@ class _ConcreteModule(BaseModule):
             target=target,
             findings=[Finding(title="found something")],
         )
+
+
+def test_finding_confidence_and_metadata():
+    f = Finding(
+        title="Vuln Found",
+        confidence=0.85,
+        source_module="vulns",
+        evidence="HTTP 200 on /admin",
+    )
+    assert f.confidence == 0.85
+    assert f.source_module == "vulns"
+    assert f.evidence == "HTTP 200 on /admin"
 
 
 def test_concrete_module_instantiates():

@@ -77,6 +77,7 @@ def scan(
     silent: bool = typer.Option(False, "--silent", help="Minimal output"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     config_file: Optional[str] = typer.Option(None, "--config", help="Custom config file"),
+    verify: Optional[bool] = typer.Option(None, "--verify/--no-verify", help="Run cross-validation pass (default: on in --full mode)"),
 ) -> None:
     """[bold]Run a reconnaissance scan against a target.[/]
 
@@ -115,6 +116,12 @@ def scan(
         cfg.modules.ports = True
     if screenshots:
         cfg.modules.screenshots = True
+
+    # Cross-validation: enabled explicitly via --verify, or by default in --full mode
+    if verify is not None:
+        cfg.general.cross_validate = verify
+    elif full:
+        cfg.general.cross_validate = True
 
     if not silent:
         console.print(
